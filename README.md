@@ -1,4 +1,4 @@
-# Doc2vecC #
+# Doc2VecC #
 
 GPU accelerated implementation of [Efficient Vector Representation for Documents Through Corruption](https://openreview.net/pdf?id=B1Igu2ogg)
 
@@ -8,6 +8,23 @@ The original implementaion is from [@mchen24/iclr2017](https://github.com/mchen2
 This repository only accelerate the training progress while **NOT** including the whole experiment.
 
 You should check the original implementation for more detail.
+
+## Getting started ##
+
+### Building Project ###
+
+```bash
+git clone https://github.com/oToToT/Doc2VecC
+cd Doc2VecC/build
+cmake .. && make
+```
+
+### Usage ###
+
+```bash
+./doc2vecc
+```
+
 
 ## Reference ##
 
