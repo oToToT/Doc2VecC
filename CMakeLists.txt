@@ -6,7 +6,7 @@ project(doc2vecc LANGUAGES CXX CUDA)
 add_library (
     doc2vecc_lib STATIC
     utils.cpp
-    utils.h
+    vocab.cpp
 )
 
 # Request that particles be built with -std=c++14

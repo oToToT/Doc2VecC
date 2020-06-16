@@ -11,7 +11,7 @@ You should check the original implementation for more detail.
 
 ## Getting started ##
 
-### Building Project ###
+### Building this Project ###
 
 ```bash
 git clone https://github.com/oToToT/Doc2VecC
