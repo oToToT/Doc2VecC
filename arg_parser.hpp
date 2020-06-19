@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef ARG_PARSER_H
+#define ARG_PARSER_H
 
 #include <string>
 #include <unordered_set>
@@ -13,7 +13,5 @@ class ArgParser {
         void parse_arg(int, const char *[]);
         std::string getopt(std::string);
 };
-
-void print_usage();
 
 #endif

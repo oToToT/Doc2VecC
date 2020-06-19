@@ -11,16 +11,14 @@ using llu = uint64_t;
 
 extern int debug;
 
-VocabWord::VocabWord(): count(0) {}
-
 void Vocab::add(std::string s) {
-    words[s].count += 1;
+    words[s] += 1;
 }
 void Vocab::reduce(llu reduce_size) {
     if (words.size() < reduce_size) return;
     std::vector<std::pair<llu, std::string>> c;
     for (const auto& it: words) {
-        c.emplace_back(it.second.count, it.first);
+        c.emplace_back(it.second, it.first);
     }
     std::sort(c.begin(), c.end(),
             [](const std::pair<llu, std::string> a,
@@ -65,7 +63,7 @@ llu Vocab::read_from_file(std::string filename) {
     llu count = 0;
     std::string s; llu c;
     while (fs >> s >> c) {
-        words[s].count = c;
+        words[s] = c;
         count += c;
     }
     return count;
@@ -77,7 +75,7 @@ void Vocab::save_to_file(std::string filename) {
         exit(-1);
     }
     for (const auto& it: words) {
-        fs << it.first << " " << it.second.count << '\n';
+        fs << it.first << " " << it.second << '\n';
     }
 }
 
