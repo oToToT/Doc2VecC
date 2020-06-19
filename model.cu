@@ -11,6 +11,7 @@ struct VocabWord {
 };
 
 void build_binary_tree(const Vocab& vocab, VocabWord *words) {
+    // need optimized to O(N) time
     auto vocab_cnt = vocab.get_count();
     std::vector<size_t> pa(vocab.size() * 2 - 1);
     std::vector<uint8_t> b_code(vocab.size() * 2 - 1);
@@ -47,8 +48,20 @@ void build_binary_tree(const Vocab& vocab, VocabWord *words) {
     }
 }
 
+
+void init_unigram_table() {
+
+}
+
+void init_net() {
+}
+
 void train_model(const Vocab& vocab, const ModelConfig& conf) {
     VocabWord *words;
     cudaMallocManaged(&words, vocab.size() * sizeof(VocabWord));
     build_binary_tree(vocab, words);
+
+    if (conf.negative_sample > 0) init_unigram_table();
+
+    init_net();
 }

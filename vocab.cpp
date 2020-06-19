@@ -21,9 +21,10 @@ void Vocab::add(std::string s) {
     }
     words_count[words_index[s]] += 1;
 }
-void Vocab::reduce(llu reduce_size) {
-    if (words_index.size() < reduce_size) return;
+
+void Vocab::conclude() {
     std::vector<std::pair<llu, std::string>> c;
+    c.reserve(size());
     for (const auto& it: words_index) {
         c.emplace_back(words_count[it.second], it.first);
     }
@@ -35,11 +36,10 @@ void Vocab::reduce(llu reduce_size) {
             return a.first > b.first;
         }
     );
-    for (llu i = reduce_size; i < c.size(); ++i) {
-        words_index.erase(c[i].second);
-    }
     std::vector<llu> new_count;
     std::vector<std::string> new_words;
+    new_count.reserve(size());
+    new_words.reserve(size());
     for (auto& it: words_index) {
         new_count.push_back(words_count[it.second]);
         new_words.push_back(it.first);
@@ -47,6 +47,16 @@ void Vocab::reduce(llu reduce_size) {
     }
     words_count = new_count;
     words = new_words;
+}
+
+void Vocab::reduce(llu reduce_size) {
+    if (words_index.size() < reduce_size) return;
+    conclude();
+    for (size_t i = reduce_size; i < words.size(); ++i) {
+        words_index.erase(words[i]);
+    }
+    words_count.resize(reduce_size);
+    words.resize(reduce_size);
 }
 
 llu Vocab::build_from_file(std::string filename) {
@@ -89,6 +99,7 @@ llu Vocab::read_from_file(std::string filename) {
     }
     return count;
 }
+
 void Vocab::save_to_file(std::string filename) const {
     std::fstream fs(filename, std::ios_base::binary | std::ios_base::out | std::ios_base::trunc);
     if (fs.fail()) {

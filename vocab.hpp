@@ -14,6 +14,7 @@ class Vocab {
     public:
         void add(std::string);
         size_t size() const noexcept;
+        void conclude();
         void reduce(uint64_t);
         uint64_t build_from_file(std::string);
         uint64_t read_from_file(std::string);
