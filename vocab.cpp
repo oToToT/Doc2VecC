@@ -1,9 +1,7 @@
 #include <fstream>
-#include <vector>
+#include <cinttypes>
 #include <algorithm>
 #include <cstdlib>
-#include <string>
-#include <utility>
 #include <sstream>
 #include <iostream>
 #include "vocab.hpp"
@@ -11,23 +9,44 @@ using llu = uint64_t;
 
 extern int debug;
 
+size_t Vocab::size() const noexcept {
+    return words.size();
+}
+
 void Vocab::add(std::string s) {
-    words[s] += 1;
+    if (words_index.find(s) == words_index.end()) {
+        words_index[s] = words.size();
+        words_count.push_back(0);
+        words.push_back(s);
+    }
+    words_count[words_index[s]] += 1;
 }
 void Vocab::reduce(llu reduce_size) {
-    if (words.size() < reduce_size) return;
+    if (words_index.size() < reduce_size) return;
     std::vector<std::pair<llu, std::string>> c;
-    for (const auto& it: words) {
-        c.emplace_back(it.second, it.first);
+    for (const auto& it: words_index) {
+        c.emplace_back(words_count[it.second], it.first);
     }
-    std::sort(c.begin(), c.end(),
-            [](const std::pair<llu, std::string> a,
+    std::sort(
+        c.begin(),
+        c.end(),
+        [] (const std::pair<llu, std::string> a,
                 const std::pair<llu, std::string> b) {
             return a.first > b.first;
-            });
+        }
+    );
     for (llu i = reduce_size; i < c.size(); ++i) {
-        words.erase(c[i].second);
+        words_index.erase(c[i].second);
     }
+    std::vector<llu> new_count;
+    std::vector<std::string> new_words;
+    for (auto& it: words_index) {
+        new_count.push_back(words_count[it.second]);
+        new_words.push_back(it.first);
+        it.second = new_count.size() - 1;
+    }
+    words_count = new_count;
+    words = new_words;
 }
 
 llu Vocab::build_from_file(std::string filename) {
@@ -63,19 +82,24 @@ llu Vocab::read_from_file(std::string filename) {
     llu count = 0;
     std::string s; llu c;
     while (fs >> s >> c) {
-        words[s] = c;
+        words_index[s] = words.size();
+        words_count.push_back(c);
+        words.push_back(s);
         count += c;
     }
     return count;
 }
-void Vocab::save_to_file(std::string filename) {
+void Vocab::save_to_file(std::string filename) const {
     std::fstream fs(filename, std::ios_base::binary | std::ios_base::out | std::ios_base::trunc);
     if (fs.fail()) {
         std::cerr << "Error while writing " << filename << std::endl;
         exit(-1);
     }
-    for (const auto& it: words) {
-        fs << it.first << " " << it.second << '\n';
+    for (size_t i = 0; i < words.size(); ++i) {
+        fs << words[i] << ' ' << words_count[i] << '\n';
     }
 }
 
+std::vector<llu> Vocab::get_count() const noexcept {
+    return words_count;
+}
