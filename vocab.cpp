@@ -13,7 +13,15 @@ size_t Vocab::size() const noexcept {
     return words.size();
 }
 
-void Vocab::add(std::string s) {
+bool Vocab::contain(const std::string& s) const {
+    return words_index.find(s) != words_index.end();
+}
+
+size_t Vocab::get_id(const std::string& s) const {
+    return words_index.find(s)->second;
+}
+
+void Vocab::add(const std::string& s) {
     if (words_index.find(s) == words_index.end()) {
         words_index[s] = words.size();
         words_count.push_back(0);
@@ -59,7 +67,7 @@ void Vocab::reduce(llu reduce_size) {
     words.resize(reduce_size);
 }
 
-llu Vocab::build_from_file(std::string filename) {
+llu Vocab::build_from_file(const std::string& filename) {
     std::fstream fs(filename);
     if (fs.fail()) {
         std::cerr << "Error while reading " << filename << std::endl;
@@ -83,7 +91,7 @@ llu Vocab::build_from_file(std::string filename) {
     return count;
 }
 
-llu Vocab::read_from_file(std::string filename) {
+llu Vocab::read_from_file(const std::string& filename) {
     std::fstream fs(filename, std::ios_base::binary | std::ios_base::in);
     if (fs.fail()) {
         std::cerr << "Error while reading " << filename << std::endl;
@@ -100,7 +108,7 @@ llu Vocab::read_from_file(std::string filename) {
     return count;
 }
 
-void Vocab::save_to_file(std::string filename) const {
+void Vocab::save_to_file(const std::string& filename) const {
     std::fstream fs(filename, std::ios_base::binary | std::ios_base::out | std::ios_base::trunc);
     if (fs.fail()) {
         std::cerr << "Error while writing " << filename << std::endl;

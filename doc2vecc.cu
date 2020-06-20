@@ -12,7 +12,7 @@ using llu = uint64_t;
 
 int gpu_id, debug;
 llu max_vocab_size;
-std::string train_file, wordembedding_file, output_file, vocab_output, vocab_source;
+std::string vocab_output, vocab_source;
 
 void print_usage() {
     std::cout << R"(GPU accelerated Doc2VecC implementation
@@ -87,9 +87,6 @@ ArgParser get_parser() {
 }
 
 ModelConfig parse_args(ArgParser& arg_parser) {
-    train_file = arg_parser.getopt("-train");
-    wordembedding_file = arg_parser.getopt("-word");
-    output_file = arg_parser.getopt("-output");
     vocab_output = arg_parser.getopt("-save-vocab");
     vocab_source = arg_parser.getopt("-read-vocab");
     gpu_id = stoi(arg_parser.getopt("-gpu"));
@@ -97,6 +94,9 @@ ModelConfig parse_args(ArgParser& arg_parser) {
     max_vocab_size = stoull(arg_parser.getopt("-vocab-limit"));
     
     ModelConfig conf;
+    conf.train_file = arg_parser.getopt("-train");
+    conf.wordembedding_file = arg_parser.getopt("-word");
+    conf.output_file = arg_parser.getopt("-output");
     conf.layer_size = stoi(arg_parser.getopt("-size"));
     conf.window_size = stoi(arg_parser.getopt("-window"));
     conf.sample_rate = stod(arg_parser.getopt("-sample"));
@@ -127,7 +127,7 @@ int main(int argc, const char *argv[]) {
     Vocab vocab;
     
     llu words_count = 0;
-    if (vocab_source == "") words_count = vocab.build_from_file(train_file);
+    if (vocab_source == "") words_count = vocab.build_from_file(conf.train_file);
     else words_count = vocab.read_from_file(vocab_source);
     vocab.reduce(max_vocab_size);
     vocab.conclude();
@@ -135,7 +135,7 @@ int main(int argc, const char *argv[]) {
     std::cout << "Words in train file: " << words_count << std::endl;
 
     if (vocab_output != "") vocab.save_to_file(vocab_output);
-    if (output_file == "") return 0;
+    if (conf.output_file == "") return 0;
 
     if (cudaSetDevice(gpu_id) != cudaSuccess) {
         std::cerr << "Error using device " << gpu_id << std::endl;

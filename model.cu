@@ -1,9 +1,14 @@
 #include "model.hpp"
+#include <iostream>
+#include <fstream>
+#include <sstream>
 #include <cinttypes>
 #include <queue>
 #include <cuda_runtime.h>
 using llu = uint64_t;
 using llf = double;
+
+extern int debug;
 
 struct VocabWord {
     size_t *nodes;
@@ -11,7 +16,11 @@ struct VocabWord {
     size_t codelen;
 };
 
-void build_binary_tree(const Vocab& vocab, VocabWord *words) {
+void build_binary_tree(const Vocab& vocab, VocabWord *&words) {
+    if (debug > 1) {
+        std::cout << "Building Huffman Tree." << std::endl;
+    }
+    cudaMallocManaged(&words, vocab.size() * sizeof(VocabWord));
     // need optimized to O(N) time
     auto vocab_cnt = vocab.get_count();
     std::vector<size_t> pa(vocab.size() * 2 - 1);
@@ -49,6 +58,31 @@ void build_binary_tree(const Vocab& vocab, VocabWord *words) {
     }
 }
 
+void file_to_docs(const Vocab& vocab, std::string train_file, size_t *&docs) {
+    if (debug > 1) {
+        std::cout << "Converting train file to indices." << std::endl;
+    }
+    std::vector<size_t> tmp;
+    std::fstream fs(train_file);
+    std::string ln;
+    const size_t eol = vocab.get_id("</s>");
+    while (std::getline(fs, ln)) {
+        std::stringstream ss(ln);
+        std::string w;
+        while (ss >> w) {
+            if (vocab.contain(w)) {
+                tmp.push_back(vocab.get_id(w));
+            }
+        }
+        tmp.push_back(eol);
+    }
+    if (debug > 1) {
+        std::cout << "Total Size: " << tmp.size() * sizeof(size_t) / 1024 << " KiB" << std::endl;
+    }
+    cudaMallocManaged(&docs, tmp.size() * sizeof(size_t));
+    memcpy(docs, tmp.data(), tmp.size() * sizeof(size_t));
+}
+
 
 const size_t UNIGRAM_SIZE = 100'000'000;
 const llf UNIGRAM_POWER = 0.75;
@@ -71,7 +105,8 @@ void init_unigram_table(const Vocab& vocab, size_t *tbl) {
 }
 
 
-void init_net(llf *syn0, llf *syn1, llf *syn1neg, const ModelConfig& conf, size_t vocab_size) {
+void init_net(llf *&syn0, llf *&syn1, llf *&syn1neg, const ModelConfig& conf, size_t vocab_size) {
+    cudaMallocManaged(&syn0, vocab_size * conf.layer_size * sizeof(llf));
     llu rnd = 1;
     for (size_t i = 0; i < vocab_size; ++i) {
         for (size_t j = 0; j < conf.layer_size; ++j) {
@@ -81,30 +116,29 @@ void init_net(llf *syn0, llf *syn1, llf *syn1neg, const ModelConfig& conf, size_
     }
 
     if (conf.hierarchical_softmax) {
+        cudaMallocManaged(&syn1, vocab_size * conf.layer_size * sizeof(llf));
         cudaMemset(syn1, 0, vocab_size * conf.layer_size * sizeof(llf));
     }
 
     if (conf.negative_sample > 0) {
+        cudaMallocManaged(&syn1neg, vocab_size * conf.layer_size * sizeof(llf));
         cudaMemset(syn1neg, 0, vocab_size * conf.layer_size * sizeof(llf));
     }
 }
 
 void train_model(const Vocab& vocab, const ModelConfig& conf) {
     VocabWord *words;
-    cudaMallocManaged(&words, vocab.size() * sizeof(VocabWord));
     build_binary_tree(vocab, words);
 
-    llf *syn0, *syn1, *syn1neg;
-    cudaMallocManaged(&syn0, vocab.size() * conf.layer_size * sizeof(llf));
-    if (conf.hierarchical_softmax) {
-        cudaMallocManaged(&syn1, vocab.size() * conf.layer_size * sizeof(llf));
-    }
+    size_t *docs;
+    file_to_docs(vocab, conf.train_file, docs);
+
     size_t *unigram;
     if (conf.negative_sample > 0) {
-        cudaMallocManaged(&syn1neg, vocab.size() * conf.layer_size * sizeof(llf));
         cudaMallocManaged(&unigram, UNIGRAM_SIZE * sizeof(size_t));
         init_unigram_table(vocab, unigram);
     }
-    
+
+    llf *syn0, *syn1, *syn1neg;
     init_net(syn0, syn1, syn1neg, conf, vocab.size());
 }
