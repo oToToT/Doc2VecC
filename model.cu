@@ -21,26 +21,32 @@ void build_binary_tree(const Vocab& vocab, VocabWord *&words) {
         std::cout << "Building Huffman Tree." << std::endl;
     }
     cudaMallocManaged(&words, vocab.size() * sizeof(VocabWord));
-    // need optimized to O(N) time
     auto vocab_cnt = vocab.get_count();
     std::vector<size_t> pa(vocab.size() * 2 - 1);
     std::vector<uint8_t> b_code(vocab.size() * 2 - 1);
     size_t ctr = vocab_cnt.size();
-    std::priority_queue<
-        std::pair<llu, size_t>,
-        std::vector<std::pair<llu, size_t>>,
-        std::greater<std::pair<llu, size_t>>
-    > pq;
-    for (size_t i = 0; i < vocab.size(); ++i) {
-        pq.push({vocab_cnt[i], i});
-    }
-    while (pq.size() > 1) {
-        auto m1 = pq.top(); pq.pop();
-        auto m2 = pq.top(); pq.pop();
+    std::queue<std::pair<llu, size_t>> qu;
+    auto top = [&qu, &vocab_cnt]()->std::pair<llu, size_t>{
+        if (vocab_cnt.empty()) return qu.front();
+        if (qu.empty()) return {vocab_cnt.back(), vocab_cnt.size() - 1};
+        if (qu.front().first < vocab_cnt.back())
+            return qu.front();
+        return {vocab_cnt.back(), vocab_cnt.size() - 1};
+    };
+    auto pop = [&qu, &vocab_cnt]() {
+        if (qu.empty()) vocab_cnt.pop_back();
+        else if (vocab_cnt.empty()) qu.pop();
+        else if (qu.front().first < vocab_cnt.back())
+            qu.pop();
+        else vocab_cnt.pop_back();
+    };
+    while (qu.size() + vocab_cnt.size() > 1) {
+        auto m1 = top(); pop();
+        auto m2 = top(); pop();
         pa[m1.second] = ctr;
         pa[m2.second] = ctr;
         b_code[m2.second] = 1;
-        pq.push({m1.first + m2.first, ctr++});
+        qu.push({m1.first + m2.first, ctr++});
     }
 
     for (size_t i = 0; i < vocab.size(); ++i) {
@@ -58,6 +64,7 @@ void build_binary_tree(const Vocab& vocab, VocabWord *&words) {
     }
 }
 
+// could be parallelized
 void file_to_docs(const Vocab& vocab, std::string train_file, size_t *&docs) {
     if (debug > 1) {
         std::cout << "Converting train file to indices." << std::endl;
@@ -141,4 +148,6 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
 
     llf *syn0, *syn1, *syn1neg;
     init_net(syn0, syn1, syn1neg, conf, vocab.size());
+
+
 }
