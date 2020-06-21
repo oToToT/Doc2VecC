@@ -7,6 +7,8 @@ add_library (
     doc2vecc_lib STATIC
     arg_parser.cpp
     vocab.cpp
+    huffman.cu
+    unigram.cu
     model.cu
 )
 
