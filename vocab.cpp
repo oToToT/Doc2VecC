@@ -1,4 +1,5 @@
 #include <fstream>
+#include <numeric>
 #include <cinttypes>
 #include <algorithm>
 #include <cstdlib>
@@ -57,14 +58,18 @@ void Vocab::conclude() {
     words = new_words;
 }
 
-void Vocab::reduce(llu reduce_size) {
-    if (words_index.size() < reduce_size) return;
+void Vocab::reduce(llu reduce_cnt) {
     conclude();
+    size_t reduce_size;
+    for (reduce_size = 0; reduce_size < words.size(); ++reduce_size) {
+        if (words_count[reduce_size] < reduce_cnt) break;
+    }
     for (size_t i = reduce_size; i < words.size(); ++i) {
         words_index.erase(words[i]);
     }
     words_count.resize(reduce_size);
     words.resize(reduce_size);
+    vocab_count = std::accumulate(words_count.begin(), words_count.end(), 0);
 }
 
 llu Vocab::build_from_file(const std::string& filename) {
@@ -73,16 +78,16 @@ llu Vocab::build_from_file(const std::string& filename) {
         std::cerr << "Error while reading " << filename << std::endl;
         exit(-1);
     }
-    llu count = 1;
+    vocab_count = 0;
     std::string w;
     while (fs >> w) {
-        add(w); count++;
-        if (debug > 1 && count % 10000 == 0) {
-            std::cout << "Reading " << count / 1000 << "K\r";
+        add(w); vocab_count++;
+        if (debug > 1 && vocab_count % 10000 == 0) {
+            std::cout << "Reading " << vocab_count / 1000 << "K\r";
         }
     }
     
-    return count;
+    return vocab_count;
 }
 
 llu Vocab::read_from_file(const std::string& filename) {
@@ -91,15 +96,15 @@ llu Vocab::read_from_file(const std::string& filename) {
         std::cerr << "Error while reading " << filename << std::endl;
         exit(-1);
     }
-    llu count = 0;
+    vocab_count = 0;
     std::string s; llu c;
     while (fs >> s >> c) {
         words_index[s] = words.size();
         words_count.push_back(c);
         words.push_back(s);
-        count += c;
+        vocab_count += c;
     }
-    return count;
+    return vocab_count;
 }
 
 void Vocab::save_to_file(const std::string& filename) const {
@@ -115,4 +120,12 @@ void Vocab::save_to_file(const std::string& filename) const {
 
 std::vector<llu> Vocab::get_count() const noexcept {
     return words_count;
+}
+
+llu Vocab::get_count(size_t i) const {
+    return words_count[i];
+}
+
+llu Vocab::get_total_count() const noexcept {
+    return vocab_count;
 }

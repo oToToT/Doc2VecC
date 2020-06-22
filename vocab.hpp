@@ -11,6 +11,7 @@ class Vocab {
     std::vector<std::string> words;
     std::vector<uint64_t> words_count;
     std::unordered_map<std::string, size_t> words_index;
+    uint64_t vocab_count;
     public:
         void add(const std::string&);
         bool contain(const std::string&) const;
@@ -22,6 +23,8 @@ class Vocab {
         uint64_t read_from_file(const std::string&);
         void save_to_file(const std::string&) const;
         std::vector<uint64_t> get_count() const noexcept;
+        uint64_t get_count(size_t) const;
+        uint64_t get_total_count() const noexcept;
 };
 
 #endif

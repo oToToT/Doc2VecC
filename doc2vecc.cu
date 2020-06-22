@@ -11,7 +11,7 @@ using llf = double;
 using llu = uint64_t;
 
 int gpu_id, debug;
-llu max_vocab_size;
+llu min_count;
 std::string vocab_output, vocab_source;
 
 void print_usage() {
@@ -91,7 +91,7 @@ ModelConfig parse_args(ArgParser& arg_parser) {
     vocab_source = arg_parser.getopt("-read-vocab");
     gpu_id = stoi(arg_parser.getopt("-gpu"));
     debug = stoi(arg_parser.getopt("-debug"));
-    max_vocab_size = stoull(arg_parser.getopt("-vocab-limit"));
+    min_count = stoull(arg_parser.getopt("-min-count"));
     
     ModelConfig conf;
     conf.train_file = arg_parser.getopt("-train");
@@ -103,7 +103,6 @@ ModelConfig parse_args(ArgParser& arg_parser) {
     conf.hierarchical_softmax = stoi(arg_parser.getopt("-hs"));
     conf.negative_sample = stoi(arg_parser.getopt("-negative"));
     conf.iterations = stoull(arg_parser.getopt("-iter"));
-    conf.min_count = stoi(arg_parser.getopt("-min-count"));
     conf.cbow = stoi(arg_parser.getopt("-cbow"));
     if (conf.cbow) conf.alpha = 0.05;
     else conf.alpha = 0.025;
@@ -129,7 +128,7 @@ int main(int argc, const char *argv[]) {
     llu words_count = 0;
     if (vocab_source == "") words_count = vocab.build_from_file(conf.train_file);
     else words_count = vocab.read_from_file(vocab_source);
-    vocab.reduce(max_vocab_size);
+    vocab.reduce(min_count);
     vocab.conclude();
     std::cout << "Vocab size: " << vocab.size() << '\n';
     std::cout << "Words in train file: " << words_count << std::endl;
