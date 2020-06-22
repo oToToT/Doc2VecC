@@ -74,18 +74,12 @@ llu Vocab::build_from_file(const std::string& filename) {
         exit(-1);
     }
     llu count = 1;
-    add("</s>");
-    std::string ln;
-    while (std::getline(fs, ln)) {
-        std::stringstream ss(ln);
-        std::string w;
-        while (ss >> w) {
-            add(w); count++;
-            if (debug > 1 && count % 10000 == 0) {
-                std::cout << "Reading " << count / 1000 << "K\r";
-            }
+    std::string w;
+    while (fs >> w) {
+        add(w); count++;
+        if (debug > 1 && count % 10000 == 0) {
+            std::cout << "Reading " << count / 1000 << "K\r";
         }
-        add("</s>"); count++;
     }
     
     return count;
