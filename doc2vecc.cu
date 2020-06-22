@@ -130,7 +130,7 @@ int main(int argc, const char *argv[]) {
     else words_count = vocab.read_from_file(vocab_source);
     vocab.reduce(min_count);
     vocab.conclude();
-    std::cout << "Vocab size: " << vocab.size() << '\n';
+    std::cout << "Vocab size: " << vocab.size() << "      \n";
     std::cout << "Words in train file: " << words_count << std::endl;
 
     if (vocab_output != "") vocab.save_to_file(vocab_output);

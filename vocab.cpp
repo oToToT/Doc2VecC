@@ -49,10 +49,10 @@ void Vocab::conclude() {
     std::vector<std::string> new_words;
     new_count.reserve(size());
     new_words.reserve(size());
-    for (auto& it: words_index) {
-        new_count.push_back(words_count[it.second]);
-        new_words.push_back(it.first);
-        it.second = new_count.size() - 1;
+    for (const auto& it : c) {
+        new_count.push_back(words_count[words_index[it.second]]);
+        new_words.push_back(it.second);
+        words_index[it.second] = new_count.size() - 1;
     }
     words_count = new_count;
     words = new_words;
