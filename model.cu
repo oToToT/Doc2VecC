@@ -235,7 +235,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *w
     llu cur_train_word = 0;
     for (llu it = 0; it < conf.iterations; ++it) {
         if (debug > 0) {
-            std::cout << "training epoch " << it << std::endl;
+            std::cout << "training epoch " << it << "                 " << std::endl;
         }
         size_t *doc = docs;
         for (auto pt: pvt) {
@@ -247,8 +247,8 @@ void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *w
             for (size_t i = 0; i < pt; ++i) {
                 llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
                 alpha = std::max(alpha, conf.alpha * 0.0001);
-                if (debug > 0) {
-                    std::cout << "Alpha: " << alpha << ", Progress: " << static_cast<llf>(cur_train_word) / total_train_word * 100 << "%\r";
+                if (debug > 0 and cur_train_word % 100 == 0) {
+                    std::cout << "Alpha: " << alpha << ", Progress: " << static_cast<llf>(cur_train_word) / total_train_word * 100 << "%                             \r";
                 }
                 cudaMemset(neu1, 0, conf.layer_size * sizeof(llf));
                 cudaMemset(neu1e, 0, conf.layer_size * sizeof(llf));
