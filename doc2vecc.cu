@@ -36,8 +36,6 @@ Parameters for training:
 		Use Hierarchical Softmax; default is 0 (not used)
 	-negative <int>
 		Number of negative examples; default is 5, common values are 3 - 10 (0 = not used)
-	-gpu <int>
-		Use <int>-th gpu (default 0)
 	-iter <int>
 		Run more training iterations (default 10)
 	-min-count <int>
@@ -72,7 +70,6 @@ ArgParser get_parser() {
     parser.add_argument("-sample", "1e-3");
     parser.add_argument("-hs", "0");
     parser.add_argument("-negative", "5");
-    parser.add_argument("-gpu", "0");
     parser.add_argument("-iter", "10");
     parser.add_argument("-min-count", "5");
     parser.add_argument("-alpha");
@@ -89,7 +86,6 @@ ArgParser get_parser() {
 ModelConfig parse_args(ArgParser& arg_parser) {
     vocab_output = arg_parser.getopt("-save-vocab");
     vocab_source = arg_parser.getopt("-read-vocab");
-    gpu_id = stoi(arg_parser.getopt("-gpu"));
     debug = stoi(arg_parser.getopt("-debug"));
     min_count = stoull(arg_parser.getopt("-min-count"));
     
@@ -135,11 +131,6 @@ int main(int argc, const char *argv[]) {
 
     if (vocab_output != "") vocab.save_to_file(vocab_output);
     if (conf.output_file == "") return 0;
-
-    if (cudaSetDevice(gpu_id) != cudaSuccess) {
-        std::cerr << "Error using device " << gpu_id << std::endl;
-        exit(-1);
-    }
 
     train_model(vocab, conf);
     return 0;
