@@ -47,7 +47,7 @@ std::vector<size_t> file_to_docs(const Vocab& vocab, std::string train_file, siz
     return pivot;
 }
 
-void init_net(llf *&syn0, llf *&syn1, llf *&syn1neg, const ModelConfig& conf, size_t vocab_size) {
+void init_net(llf *&syn0, llf *&syn1, const ModelConfig& conf, size_t vocab_size) {
     cudaMallocManaged(&syn0, vocab_size * conf.layer_size * sizeof(llf));
     llu rnd = 1;
     for (size_t i = 0; i < vocab_size; ++i) {
@@ -57,15 +57,8 @@ void init_net(llf *&syn0, llf *&syn1, llf *&syn1neg, const ModelConfig& conf, si
         }
     }
 
-    if (conf.hierarchical_softmax) {
-        cudaMallocManaged(&syn1, vocab_size * conf.layer_size * sizeof(llf));
-        cudaMemset(syn1, 0, vocab_size * conf.layer_size * sizeof(llf));
-    }
-
-    if (conf.negative_sample > 0) {
-        cudaMallocManaged(&syn1neg, vocab_size * conf.layer_size * sizeof(llf));
-        cudaMemset(syn1neg, 0, vocab_size * conf.layer_size * sizeof(llf));
-    }
+    cudaMallocManaged(&syn1, vocab_size * conf.layer_size * sizeof(llf));
+    cudaMemset(syn1, 0, vocab_size * conf.layer_size * sizeof(llf));
 }
 
 __constant__ llf sigmoid[SIGMOID_TABLE_SIZE + 1];
@@ -79,7 +72,7 @@ void init_sigmoid() {
     cudaMemcpyToSymbol(sigmoid, sigTbl, (SIGMOID_TABLE_SIZE + 1) * sizeof(llf));
 }
 
-__global__ void sample_doc(const size_t *doc, const size_t n, const llf s, const llf rp_sample, const VocabWord *w, const size_t total_count, const int seed, size_t *sen, size_t *sen_sample) {
+__global__ void sample_doc(const size_t *doc, const size_t n, const llf s, const llf rp_sample, const VocabWord *w, const size_t total_count, const llu seed, size_t *sen, size_t *sen_sample) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
     curandState state;
     curand_init(seed, i, 0, &state);
@@ -103,18 +96,74 @@ __global__ void cbow(const size_t *sen, const size_t n, const size_t w, const in
     const int c = (int)w + (int)blockIdx.x + b - ws;
     if (c < 0 or c >= n or sen[c] == INF or c == w) return;
     const int i = threadIdx.x;
-    atomicAdd(&neu1[i], syn0[sen[c] * blockDim.x + i]);
+    atomicAdd(&neu1[i], syn0[sen[c] * ws + i]);
+}
+
+__global__ void cbow_back(const size_t *sen, const size_t n, const size_t w, const int b, const int ws, const int cw, llf *syn0, llf *neu1e) {
+    const int c = (int)w + (int)blockIdx.x + b - ws;
+    if (c < 0 or c >= n or sen[c] == INF or c == w) return;
+    const int i = threadIdx.x;
+    atomicAdd(&syn0[i + sen[c] * ws], neu1e[i] / cw);
 }
 
 __global__ void doc2vecc(const size_t *sen_sample, const size_t n, const llf w, llf *syn0, llf *neu1) {
     const int c = blockIdx.x;
-    if (c >= n or sen_sample[c] == INF) return;
+    if (sen_sample[c] == INF) return;
     const int i = threadIdx.x;
-    atomicAdd(&neu1[c], w * syn0[i + sen_sample[c] * blockDim.x]);
+    atomicAdd(&neu1[i], w * syn0[i + sen_sample[c] * blockDim.x]);
 }
 
-__global__ void negative_sampling() {
+__global__ void doc2vecc_back(const size_t *sen_sample, const size_t n, const llf w, const int cw, llf *syn0, llf *neu1e) {
+    const int c = blockIdx.x;
+    if (sen_sample[c] == INF) return;
+    const int i = threadIdx.x;
+    atomicAdd(&syn0[i + sen_sample[c] * blockDim.x], neu1e[i] * w / cw);
+}
 
+__global__ void negative_sampling(const size_t w, const llf alpha, const size_t lsize,  const llu seed, size_t *uni, llf *syn1, llf *neu1, llf *neu1e) {
+
+    const int c = threadIdx.x;
+
+    extern __shared__ llf sm[];
+    sm[c] = 0;
+
+    size_t ta;
+    int label;
+    if (blockIdx.x == 0) {
+        ta = w;
+        label = 1;
+    } else {
+        curandState state;
+        curand_init(seed, blockIdx.x, 0, &state);
+        ta = curand_uniform(&state) * 100000000;
+        label = 0;
+    }
+    const size_t tpos = ta * lsize;
+    if (c < lsize) {
+        sm[c] = neu1[c] * syn1[c + tpos];
+    }
+    for (int step = blockDim.x >> 1; step; step >>= 1) {
+        __syncthreads();
+        if (c < step) {
+            sm[c] += sm[c + step];
+        }
+    }
+    if (c == 0) {
+        sm[lsize] = sm[0];
+    }
+    __syncthreads();
+    llf f = sm[lsize], g;
+    if (f > MAX_EXP) g = (label - 1) * alpha;
+    else if (f < -MAX_EXP) g = (label - 0) * alpha;
+    else g = (label - sigmoid[(int)((f + MAX_EXP) * (SIGMOID_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+    if (c < lsize) {
+        atomicAdd(&neu1e[c], g * syn1[c + tpos]);
+        atomicAdd(&syn1[c + tpos], g * neu1[c]);
+    }
+}
+
+__global__ void averaging(const int cw, llf *neu1) {
+    neu1[threadIdx.x] /= cw;
 }
 
 static inline llu rnd() {
@@ -124,6 +173,9 @@ static inline llu rnd() {
 }
 
 void train_model(const Vocab& vocab, const ModelConfig& conf) {
+    size_t layer_size_2 = 1;
+    while (layer_size_2 < conf.layer_size) layer_size_2 <<= 1;
+
     VocabWord *words;
     build_binary_tree(vocab, words);
 
@@ -136,8 +188,8 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
         init_unigram_table(vocab, unigram);
     }
 
-    llf *syn0, *syn1, *syn1neg;
-    init_net(syn0, syn1, syn1neg, conf, vocab.size());
+    llf *syn0, *syn1;
+    init_net(syn0, syn1, conf, vocab.size());
 
     init_sigmoid();
 
@@ -147,34 +199,45 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
     llf *neu1, *neu1e;
     cudaMalloc(&neu1, conf.layer_size * sizeof(llf));
     cudaMalloc(&neu1e, conf.layer_size * sizeof(llf));
-    
+
+    const llu total_train_word = conf.iterations * vocab.get_total_count();
+    llu cur_train_word = 0;
     for (llu it = 0; it < conf.iterations; ++it) {
         if (debug > 0) {
             std::cout << "training epoch " << it << std::endl;
         }
         size_t *doc = docs;
         for (auto pt: pvt) {
-            sample_doc<<<256, (pt + 255) / 256>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample);
-            doc2vecc<<<conf.layer_size, pt>>>(sen_sample, pt, 1. / conf.rp_sample / pt, syn0, neu1);
+            sample_doc<<<(pt + 255) / 256, 256>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample);
+            llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
+            alpha = max(alpha, conf.alpha * 0.0001);
             for (size_t i = 0; i < pt; ++i) {
                 cudaMemset(&neu1, 0, conf.layer_size * sizeof(llf));
+                cudaMemset(&neu1, 0, conf.layer_size * sizeof(llf));
+                doc2vecc<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / pt, syn0, neu1);
+                int cw = 2;
                 if (conf.cbow) {
                     int b = rnd() % conf.window_size;
                     // maybe conf.window_size * 1
                     int blocks = conf.window_size * 2 - 2 * b + 1;
-                    cbow<<<conf.layer_size, blocks>>>(doc, pt, i, b, conf.window_size, syn0, neu1);
-                    int cw = std::max((int)i + conf.window_size - b + 1, (int)pt) - std::max((int)i - conf.window_size + b, 0);
+                    cbow<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size, syn0, neu1);
+                    cw = std::max((int)i + conf.window_size - b + 1, (int)pt) - std::max((int)i - conf.window_size + b, 0);
+                    averaging<<<1, conf.layer_size>>>(cw, neu1);
                     if (conf.hierarchical_softmax) {
 
                     } else {
+                        negative_sampling<<<conf.negative_sample, layer_size_2, layer_size_2 * sizeof(llf)>>>(i, alpha, conf.layer_size, rnd(), unigram, syn1, neu1, neu1e);
                     }
+                    cbow_back<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size, cw, syn0, neu1e);
                 } else {
                     if (conf.hierarchical_softmax) {
                     } else {
                     }
                 }
+                doc2vecc_back<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / pt, cw, syn0, neu1e);
             }
             doc += pt;
+            cur_train_word += pt;
         }
     }
 }

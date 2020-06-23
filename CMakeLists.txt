@@ -5,8 +5,9 @@ include(FindCUDA)
 
 cuda_select_nvcc_arch_flags(CUDA_ARCH_FLAGS Auto)
 list(APPEND CUDA_NVCC_FLAGS ${CUDA_ARCH_FLAGS})
- 
-add_library(doc2vecc_lib STATIC
+
+cuda_add_library(
+    doc2vecc_lib STATIC
     model.cu
     arg_parser.cpp
     vocab.cpp
@@ -34,4 +35,3 @@ if(APPLE)
   # so that the static cuda runtime can find it at runtime.
   set_property(TARGET doc2vecc PROPERTY BUILD_RPATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
 endif()
-
