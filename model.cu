@@ -57,7 +57,7 @@ void init_net(llf *&syn0, llf *&syn1, const ModelConfig& conf, size_t vocab_size
         }
     }
 
-    cudaMallocManaged(&syn1, vocab_size * conf.layer_size * sizeof(llf));
+    cudaMalloc(&syn1, vocab_size * conf.layer_size * sizeof(llf));
     cudaMemset(syn1, 0, vocab_size * conf.layer_size * sizeof(llf));
 }
 
@@ -72,22 +72,35 @@ void init_sigmoid() {
     cudaMemcpyToSymbol(sigmoid, sigTbl, (SIGMOID_TABLE_SIZE + 1) * sizeof(llf));
 }
 
-__global__ void sample_doc(const size_t *doc, const size_t n, const llf s, const llf rp_sample, const VocabWord *w, const size_t total_count, const llu seed, size_t *sen, size_t *sen_sample) {
+__global__ void sample_doc(const size_t *doc, const size_t n, const llf s, const llf rp_sample, const VocabWord *w, const size_t total_count, const llu seed, size_t *sen, size_t *sen_sample, int *sen_len) {
+    extern __shared__ int shm[];
+    shm[threadIdx.x] = 0;
+
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    curandState state;
-    curand_init(seed, i, 0, &state);
-    if (i >= n) return;
-    sen[i] = INF;
-    llf r = 1;
-    if (s > 0) {
-        r = (sqrt(w[i].cnt / (s * total_count)) + 1) * (s * total_count) / w[i].cnt;
+    if (i < n) {
+        curandState state;
+        curand_init(seed, i, 0, &state);
+        sen[i] = INF;
+        llf r = 1;
+        if (s > 0) {
+            r = (sqrt(w[i].cnt / (s * total_count)) + 1) * (s * total_count) / w[i].cnt;
+            shm[threadIdx.x] += 1;
+        }
+        if (r >= curand_uniform_double(&state)) {
+            sen[i] = doc[i];
+        }
+        sen_sample[i] = INF;
+        if (rp_sample >= curand_uniform_double(&state)) {
+            sen_sample[i] = sen[i];
+        }
     }
-    if (r >= curand_uniform_double(&state)) {
-        sen[i] = doc[i];
+    for (int step = blockDim.x >> 1; step; step >>= 1) {
+        if (threadIdx.x < step) {
+            shm[threadIdx.x] += shm[threadIdx.x + step];
+        }
     }
-    sen_sample[i] = INF;
-    if (rp_sample >= curand_uniform_double(&state)) {
-        sen_sample[i] = sen[i];
+    if (threadIdx.x == 0) {
+        sen_len[blockIdx.x] = shm[0];
     }
 }
 
@@ -120,7 +133,7 @@ __global__ void doc2vecc_back(const size_t *sen_sample, const size_t n, const ll
     atomicAdd(&syn0[i + sen_sample[c] * blockDim.x], neu1e[i] * w / cw);
 }
 
-__global__ void negative_sampling(const size_t w, const llf alpha, const size_t lsize,  const llu seed, size_t *uni, llf *syn1, llf *neu1, llf *neu1e) {
+__global__ void negative_sampling(const size_t w, const llf alpha, const size_t lsize, const llu seed, size_t *uni, llf *syn1, llf *neu1, llf *neu1e) {
 
     const int c = threadIdx.x;
 
@@ -135,7 +148,7 @@ __global__ void negative_sampling(const size_t w, const llf alpha, const size_t 
     } else {
         curandState state;
         curand_init(seed, blockIdx.x, 0, &state);
-        ta = curand_uniform(&state) * 100000000;
+        ta = uni[(int)(curand_uniform(&state) * UNIGRAM_SIZE)];
         label = 0;
     }
     const size_t tpos = ta * lsize;
@@ -197,8 +210,11 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
     cudaMalloc(&sen, mx_len * sizeof(size_t));
     cudaMalloc(&sen_sample, mx_len * sizeof(size_t));
     llf *neu1, *neu1e;
-    cudaMalloc(&neu1, conf.layer_size * sizeof(llf));
+    cudaMallocManaged(&neu1, conf.layer_size * sizeof(llf));
     cudaMalloc(&neu1e, conf.layer_size * sizeof(llf));
+
+    int *sen_lens;
+    cudaMallocManaged(&sen_lens, (mx_len + 511) / 512 * sizeof(int));
 
     const llu total_train_word = conf.iterations * vocab.get_total_count();
     llu cur_train_word = 0;
@@ -208,17 +224,21 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
         }
         size_t *doc = docs;
         for (auto pt: pvt) {
-            sample_doc<<<(pt + 255) / 256, 256>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample);
+            cudaMemset(sen_lens, 0, (pt + 511) / 512 * sizeof(int));
+            sample_doc<<<(pt + 511) / 512, 512, 512 * sizeof(int)>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
+            int sen_len = 0;
+            for (int i = 0 ; i < (pt + 511) / 512; ++i)
+                sen_len += sen_lens[i];
             llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
             alpha = max(alpha, conf.alpha * 0.0001);
             for (size_t i = 0; i < pt; ++i) {
-                cudaMemset(&neu1, 0, conf.layer_size * sizeof(llf));
-                cudaMemset(&neu1, 0, conf.layer_size * sizeof(llf));
-                doc2vecc<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / pt, syn0, neu1);
+                cudaMemset(neu1, 0, conf.layer_size * sizeof(llf));
+                cudaMemset(neu1e, 0, conf.layer_size * sizeof(llf));
+                doc2vecc<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / sen_len, syn0, neu1);
                 int cw = 2;
                 if (conf.cbow) {
                     int b = rnd() % conf.window_size;
-                    // maybe conf.window_size * 1
+                    // this part is quite wrong...
                     int blocks = conf.window_size * 2 - 2 * b + 1;
                     cbow<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size, syn0, neu1);
                     cw = std::max((int)i + conf.window_size - b + 1, (int)pt) - std::max((int)i - conf.window_size + b, 0);
@@ -226,7 +246,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
                     if (conf.hierarchical_softmax) {
 
                     } else {
-                        negative_sampling<<<conf.negative_sample, layer_size_2, layer_size_2 * sizeof(llf)>>>(i, alpha, conf.layer_size, rnd(), unigram, syn1, neu1, neu1e);
+                        negative_sampling<<<conf.negative_sample, layer_size_2, (layer_size_2 + 1) * sizeof(llf)>>>(i, alpha, conf.layer_size, rnd(), unigram, syn1, neu1, neu1e);
                     }
                     cbow_back<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size, cw, syn0, neu1e);
                 } else {
@@ -234,7 +254,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
                     } else {
                     }
                 }
-                doc2vecc_back<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / pt, cw, syn0, neu1e);
+                doc2vecc_back<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / sen_len, cw, syn0, neu1e);
             }
             doc += pt;
             cur_train_word += pt;
