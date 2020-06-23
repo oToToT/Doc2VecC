@@ -43,6 +43,7 @@ void build_binary_tree(const Vocab& vocab, VocabWord *&words) {
     }
 
     for (size_t i = 0; i < vocab.size(); ++i) {
+        words[i].cnt = vocab.get_count(i);
         words[i].codelen = 0;
         for (size_t pt = i; pt + 1 < ctr; pt = pa[pt]) {
             words[i].codelen += 1;
