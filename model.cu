@@ -18,6 +18,7 @@ using llf = double;
 extern int debug;
 
 #define INF 2147483647
+#define SAMPLE_DOC_THREAD 1024
 
 static inline llu rnd() {
     static llu r = 0;
@@ -115,28 +116,32 @@ __global__ void cbow(const size_t *sen, const size_t n, const size_t w, const in
     const int c = (int)w + (int)blockIdx.x + b - ws;
     if (c < 0 or c >= n or sen[c] == INF or c == w) return;
     const int i = threadIdx.x;
-    atomicAdd(&neu1[i], syn0[sen[c] * ws + i]);
+    neu1[i] += syn0[sen[c] * ws + i];
+    //atomicAdd(&neu1[i], syn0[sen[c] * ws + i]);
 }
 
 __global__ void cbow_back(const size_t *sen, const size_t n, const size_t w, const int b, const int ws, const int cw, llf *syn0, llf *neu1e) {
     const int c = (int)w + (int)blockIdx.x + b - ws;
     if (c < 0 or c >= n or sen[c] == INF or c == w) return;
     const int i = threadIdx.x;
-    atomicAdd(&syn0[i + sen[c] * ws], neu1e[i] / cw);
+    syn0[i + sen[c] * ws] += neu1e[i] / cw;
+    //atomicAdd(&syn0[i + sen[c] * ws], neu1e[i] / cw);
 }
 
 __global__ void doc2vecc(const size_t *sen_sample, const size_t n, const llf w, llf *syn0, llf *neu1) {
     const int c = blockIdx.x;
     if (sen_sample[c] == INF) return;
     const int i = threadIdx.x;
-    atomicAdd(&neu1[i], w * syn0[i + sen_sample[c] * blockDim.x]);
+    neu1[i] += w * syn0[i + sen_sample[c] * blockDim.x];
+    //atomicAdd(&neu1[i], w * syn0[i + sen_sample[c] * blockDim.x]);
 }
 
 __global__ void doc2vecc_back(const size_t *sen_sample, const size_t n, const llf w, const int cw, llf *syn0, llf *neu1e) {
     const int c = blockIdx.x;
     if (sen_sample[c] == INF) return;
     const int i = threadIdx.x;
-    atomicAdd(&syn0[i + sen_sample[c] * blockDim.x], neu1e[i] * w / cw);
+    syn0[i + sen_sample[c] * blockDim.x] += neu1e[i] * w / cw;
+    //atomicAdd(&syn0[i + sen_sample[c] * blockDim.x], neu1e[i] * w / cw);
 }
 
 __global__ void negative_sampling(const size_t w, const llf alpha, const size_t lsize, const llu seed, size_t *uni, llf *syn1, llf *neu1, llf *neu1e) {
@@ -176,8 +181,10 @@ __global__ void negative_sampling(const size_t w, const llf alpha, const size_t 
     else if (f < -MAX_EXP) g = (label - 0) * alpha;
     else g = (label - sigmoid[(int)((f + MAX_EXP) * (SIGMOID_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
     if (c < lsize) {
-        atomicAdd(&neu1e[c], g * syn1[c + tpos]);
-        atomicAdd(&syn1[c + tpos], g * neu1[c]);
+        neu1e[c] += g * syn1[c + tpos];
+        syn1[c + tpos] += g * neu1[c];
+        //atomicAdd(&neu1e[c], g * syn1[c + tpos]);
+        //atomicAdd(&syn1[c + tpos], g * neu1[c]);
     }
 }
 
@@ -232,17 +239,17 @@ void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *w
         }
         size_t *doc = docs;
         for (auto pt: pvt) {
-            llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
-            alpha = max(alpha, conf.alpha * 0.0001);
-            if (debug > 0) {
-                std::cout << "Alpha: " << alpha << ", Progress: " << static_cast<llf>(cur_train_word) / total_train_word << '\r';
-            }
-            cudaMemset(sen_lens, 0, (pt + 511) / 512 * sizeof(int));
-            sample_doc<<<(pt + 511) / 512, 512, 512 * sizeof(int)>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
+            cudaMemset(sen_lens, 0, (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD * sizeof(int));
+            sample_doc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
             int sen_len = 0;
-            for (int i = 0 ; i < (pt + 511) / 512; ++i)
+            for (int i = 0 ; i < (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD; ++i)
                 sen_len += sen_lens[i];
             for (size_t i = 0; i < pt; ++i) {
+                llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
+                alpha = std::max(alpha, conf.alpha * 0.0001);
+                if (debug > 0) {
+                    std::cout << "Alpha: " << alpha << ", Progress: " << static_cast<llf>(cur_train_word) / total_train_word * 100 << "%\r";
+                }
                 cudaMemset(neu1, 0, conf.layer_size * sizeof(llf));
                 cudaMemset(neu1e, 0, conf.layer_size * sizeof(llf));
                 doc2vecc<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / sen_len, syn0, neu1);
@@ -266,9 +273,9 @@ void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *w
                     }
                 }
                 doc2vecc_back<<<pt, conf.layer_size>>>(sen_sample, pt, 1. / conf.rp_sample / sen_len, cw, syn0, neu1e);
+                cur_train_word++;
             }
             doc += pt;
-            cur_train_word += pt;
         }
     }
     save_embedding(conf.wordembedding_file, syn0, vocab, conf.layer_size);
@@ -286,11 +293,11 @@ void predict_model(llf *syn0, llf sr, const size_t layer_size, const Vocab& voca
     cudaMallocManaged(&neu1, layer_size * sizeof(llf));
 
     int *sen_lens;
-    cudaMallocManaged(&sen_lens, (mx_len + 511) / 512 * sizeof(int));
+    cudaMallocManaged(&sen_lens, (mx_len + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD * sizeof(int));
     for (auto pt: pvt) {
-        sample_doc<<<(pt + 511) / 512, 512, 512 * sizeof(int)>>>(docs, pt, sr, 0, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
+        sample_doc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(docs, pt, sr, 0, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
         int sen_len = 0;
-        for (int i = 0 ; i < (pt + 511) / 512; ++i)
+        for (int i = 0 ; i < (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD; ++i)
             sen_len += sen_lens[i];
         doc2vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
         for (size_t i = 0; i < layer_size; ++i) {

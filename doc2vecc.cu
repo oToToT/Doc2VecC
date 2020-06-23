@@ -120,8 +120,6 @@ int main(int argc, const char *argv[]) {
         print_usage();
         return 0;
     }
-    std::cout.precision(2);
-
     ArgParser arg_parser = get_parser();
     arg_parser.parse_arg(argc, argv);
     ModelConfig conf = parse_args(arg_parser);
