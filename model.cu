@@ -19,14 +19,20 @@ extern int debug;
 
 #define INF 2147483647
 
-// could be parallelized
-std::vector<size_t> file_to_docs(const Vocab& vocab, std::string train_file, size_t *&docs) {
+static inline llu rnd() {
+    static llu r = 0;
+    r = r * 25214903917LLU + 11LLU;
+    return r;
+}
+
+// could be parallelized?
+std::vector<size_t> file_to_docs(const Vocab& vocab, std::string f, size_t *&docs) {
     if (debug > 1) {
         std::cout << "Converting train file to indices." << std::endl;
     }
     size_t pv = 0;
     std::vector<size_t> tmp, pivot;
-    std::fstream fs(train_file);
+    std::fstream fs(f);
     std::string ln;
     while (std::getline(fs, ln)) {
         std::stringstream ss(ln);
@@ -179,18 +185,20 @@ __global__ void averaging(const int cw, llf *neu1) {
     neu1[threadIdx.x] /= cw;
 }
 
-static inline llu rnd() {
-    static llu r = 0;
-    r = r * 25214903917LLU + 11LLU;
-    return r;
+void save_embedding(std::string f, llf *syn0, const Vocab& vocab, size_t layer_size) {
+    std::fstream fs(f);
+    fs << vocab.size() << layer_size << '\n';
+    for (size_t i = 0; i < vocab.size(); ++i) {
+        fs << vocab.get_word(i);
+        for (size_t j = 0; j < layer_size; ++j)
+            fs << ' ' << syn0[i * layer_size + j];
+        fs << '\n';
+    }
 }
 
-void train_model(const Vocab& vocab, const ModelConfig& conf) {
+void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *words, llf *&syn0) {
     size_t layer_size_2 = 1;
     while (layer_size_2 < conf.layer_size) layer_size_2 <<= 1;
-
-    VocabWord *words;
-    build_binary_tree(vocab, words);
 
     size_t *docs;
     std::vector<size_t> pvt = file_to_docs(vocab, conf.train_file, docs);
@@ -201,7 +209,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
         init_unigram_table(vocab, unigram);
     }
 
-    llf *syn0, *syn1;
+    llf *syn1;
     init_net(syn0, syn1, conf, vocab.size());
 
     init_sigmoid();
@@ -210,7 +218,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
     cudaMalloc(&sen, mx_len * sizeof(size_t));
     cudaMalloc(&sen_sample, mx_len * sizeof(size_t));
     llf *neu1, *neu1e;
-    cudaMallocManaged(&neu1, conf.layer_size * sizeof(llf));
+    cudaMalloc(&neu1, conf.layer_size * sizeof(llf));
     cudaMalloc(&neu1e, conf.layer_size * sizeof(llf));
 
     int *sen_lens;
@@ -224,13 +232,16 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
         }
         size_t *doc = docs;
         for (auto pt: pvt) {
+            llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
+            alpha = max(alpha, conf.alpha * 0.0001);
+            if (debug > 0) {
+                std::cout << "Alpha: " << alpha << ", Progress: " << static_cast<llf>(cur_train_word) / total_train_word << '\r';
+            }
             cudaMemset(sen_lens, 0, (pt + 511) / 512 * sizeof(int));
             sample_doc<<<(pt + 511) / 512, 512, 512 * sizeof(int)>>>(doc, pt, conf.sample_rate, conf.rp_sample, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
             int sen_len = 0;
             for (int i = 0 ; i < (pt + 511) / 512; ++i)
                 sen_len += sen_lens[i];
-            llf alpha = conf.alpha * (1 - static_cast<llf>(cur_train_word) / total_train_word);
-            alpha = max(alpha, conf.alpha * 0.0001);
             for (size_t i = 0; i < pt; ++i) {
                 cudaMemset(neu1, 0, conf.layer_size * sizeof(llf));
                 cudaMemset(neu1e, 0, conf.layer_size * sizeof(llf));
@@ -260,4 +271,31 @@ void train_model(const Vocab& vocab, const ModelConfig& conf) {
             cur_train_word += pt;
         }
     }
+    save_embedding(conf.wordembedding_file, syn0, vocab, conf.layer_size);
+}
+
+void predict_model(llf *syn0, llf sr, const size_t layer_size, const Vocab& vocab, const VocabWord *words, std::string inp, std::string oup) {
+    std::fstream fs(oup);
+    size_t *docs, *sen_sample, *sen;
+    std::vector<size_t> pvt = file_to_docs(vocab, inp, docs);
+    size_t mx_len = *std::max_element(pvt.begin(), pvt.end());
+    cudaMallocManaged(&sen, mx_len * sizeof(size_t));
+    cudaMalloc(&sen_sample, mx_len * sizeof(size_t));
+    
+    llf *neu1;
+    cudaMallocManaged(&neu1, layer_size * sizeof(llf));
+
+    int *sen_lens;
+    cudaMallocManaged(&sen_lens, (mx_len + 511) / 512 * sizeof(int));
+    for (auto pt: pvt) {
+        sample_doc<<<(pt + 511) / 512, 512, 512 * sizeof(int)>>>(docs, pt, sr, 0, words, vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
+        int sen_len = 0;
+        for (int i = 0 ; i < (pt + 511) / 512; ++i)
+            sen_len += sen_lens[i];
+        doc2vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
+        for (size_t i = 0; i < layer_size; ++i) {
+            fs << neu1[i] << "　\n"[i + 1 == layer_size];
+        }
+        docs += pt;
+    }   
 }

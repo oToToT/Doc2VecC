@@ -11,7 +11,7 @@ struct ModelConfig {
     uint64_t iterations;
     int window_size, negative_sample, min_count;
     bool hierarchical_softmax, cbow, binary;
-    std::string train_file, output_file, wordembedding_file;
+    std::string train_file, wordembedding_file;
 };
 
 #endif

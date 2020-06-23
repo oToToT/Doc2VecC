@@ -22,6 +22,10 @@ size_t Vocab::get_id(const std::string& s) const {
     return words_index.find(s)->second;
 }
 
+std::string Vocab::get_word(const size_t i) const {
+    return words[i];
+}
+
 void Vocab::add(const std::string& s) {
     if (words_index.find(s) == words_index.end()) {
         words_index[s] = words.size();

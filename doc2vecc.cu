@@ -1,4 +1,5 @@
 #include "arg_parser.hpp"
+#include "huffman.hpp"
 #include "vocab.hpp"
 #include "model.hpp"
 #include "model_config.hpp"
@@ -12,7 +13,7 @@ using llu = uint64_t;
 
 int gpu_id, debug;
 llu min_count;
-std::string vocab_output, vocab_source;
+std::string vocab_output, vocab_source, output_file, test_file;
 
 void print_usage() {
     std::cout << R"(GPU accelerated Doc2VecC implementation
@@ -25,6 +26,8 @@ Parameters for training:
 		Use <file> to save the resulting word vectors; default is wordvec.txt
 	-output <file>
 		Use <file> to save the resulting document vectors; default is docvec.txt
+    -test <file>
+        Predict text data from <file> with model; default is test.txt
 	-size <int>
 		Set size of word vectors; default is 100
 	-window <int>
@@ -65,6 +68,7 @@ ArgParser get_parser() {
     parser.add_argument("-train", "data.txt");
     parser.add_argument("-word", "wordvec.txt");
     parser.add_argument("-output", "docvec.txt");
+    parser.add_argument("-test", "test.txt");
     parser.add_argument("-size", "100");
     parser.add_argument("-window", "5");
     parser.add_argument("-sample", "1e-3");
@@ -86,13 +90,14 @@ ArgParser get_parser() {
 ModelConfig parse_args(ArgParser& arg_parser) {
     vocab_output = arg_parser.getopt("-save-vocab");
     vocab_source = arg_parser.getopt("-read-vocab");
+    output_file = arg_parser.getopt("-output");
+    test_file = arg_parser.getopt("-test");
     debug = stoi(arg_parser.getopt("-debug"));
     min_count = stoull(arg_parser.getopt("-min-count"));
     
     ModelConfig conf;
     conf.train_file = arg_parser.getopt("-train");
     conf.wordembedding_file = arg_parser.getopt("-word");
-    conf.output_file = arg_parser.getopt("-output");
     conf.layer_size = stoi(arg_parser.getopt("-size"));
     conf.window_size = stoi(arg_parser.getopt("-window"));
     conf.sample_rate = stod(arg_parser.getopt("-sample"));
@@ -115,6 +120,8 @@ int main(int argc, const char *argv[]) {
         print_usage();
         return 0;
     }
+    std::cout.precision(2);
+
     ArgParser arg_parser = get_parser();
     arg_parser.parse_arg(argc, argv);
     ModelConfig conf = parse_args(arg_parser);
@@ -130,8 +137,13 @@ int main(int argc, const char *argv[]) {
     std::cout << "Words in train file: " << words_count << std::endl;
 
     if (vocab_output != "") vocab.save_to_file(vocab_output);
-    if (conf.output_file == "") return 0;
+    if (output_file == "") return 0;
 
-    train_model(vocab, conf);
+    VocabWord *words;
+    build_binary_tree(vocab, words);
+
+    llf *model;
+    train_model(vocab, conf, words, model);
+    predict_model(model, conf.layer_size, conf.sample_rate, vocab, words, test_file, output_file);
     return 0;
 }
