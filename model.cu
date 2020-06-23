@@ -229,7 +229,7 @@ void train_model(const Vocab& vocab, const ModelConfig& conf, const VocabWord *w
     cudaMalloc(&neu1e, conf.layer_size * sizeof(llf));
 
     int *sen_lens;
-    cudaMallocManaged(&sen_lens, (mx_len + 511) / 512 * sizeof(int));
+    cudaMallocManaged(&sen_lens, (mx_len + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD * sizeof(int));
 
     const llu total_train_word = conf.iterations * vocab.get_total_count();
     llu cur_train_word = 0;
