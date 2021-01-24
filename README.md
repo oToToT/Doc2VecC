@@ -1,3 +1,5 @@
+# **The implementation in this repo is totally wrong, do NOT use this repo** #
+
 # Doc2VecC #
 
 GPU accelerated implementation of [Efficient Vector Representation for Documents Through Corruption](https://openreview.net/pdf?id=B1Igu2ogg)
