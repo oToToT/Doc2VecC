@@ -135,17 +135,17 @@ int main(int argc, const char **argv) {
 
   llu words_count = 0;
   if (not vocab_source.empty()) {
-    words_count = vocab.restore_from_saved_file(vocab_source);
+    words_count = vocab.RestoreFromSavedFile(vocab_source);
   } else {
-    words_count = vocab.build_from_file(conf.train_file);
+    words_count = vocab.BuildFromFile(conf.train_file);
   }
-  vocab.reduce(min_count);
-  vocab.conclude();
+  vocab.Reduce(min_count);
+  vocab.Sort();
   std::cout << "Vocab size: " << vocab.size() << "      \n";
   std::cout << "Words in train file: " << words_count << std::endl;
 
   if (not vocab_output.empty()) {
-    vocab.save_to_file(vocab_output);
+    vocab.SaveToFile(vocab_output);
   }
   if (output_file.empty()) {
     return 0;

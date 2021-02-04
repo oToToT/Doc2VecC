@@ -17,7 +17,7 @@ void BuildBinaryTree(const Vocab& vocab, VocabWord** words_ptr) {
     std::cout << "Building Huffman Tree." << std::endl;
   }
   cudaMallocManaged(&words, vocab.size() * sizeof(VocabWord));
-  auto vocab_cnt = vocab.get_count();
+  auto vocab_cnt = vocab.GetCounts();
   std::vector<size_t> pa(vocab.size() * 2 - 1);
   std::vector<uint8_t> b_code(vocab.size() * 2 - 1);
   size_t ctr = vocab_cnt.size();
@@ -57,7 +57,7 @@ void BuildBinaryTree(const Vocab& vocab, VocabWord** words_ptr) {
   }
 
   for (size_t i = 0; i < vocab.size(); ++i) {
-    words[i].cnt = vocab.get_count(i);
+    words[i].cnt = vocab.GetCount(i);
     words[i].codelen = 0;
     for (size_t pt = i; pt + 1 < ctr; pt = pa[pt]) {
       words[i].codelen += 1;

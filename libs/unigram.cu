@@ -12,7 +12,7 @@ void init_unigram_table(const Vocab &vocab, size_t **table_ptr) {
   size_t *&table = *table_ptr;
   auto *tbl_ = new size_t[UNIGRAM_SIZE];
   cudaMalloc(&table, UNIGRAM_SIZE * sizeof(size_t));
-  auto vocab_cnt = vocab.get_count();
+  auto vocab_cnt = vocab.GetCounts();
   llf words_tot = 0;
   for (size_t i = 0; i < vocab.size(); ++i) {
     words_tot += std::pow(vocab_cnt[i], UNIGRAM_POWER);
@@ -27,5 +27,6 @@ void init_unigram_table(const Vocab &vocab, size_t **table_ptr) {
       cur_tot += pow(vocab_cnt[pos], UNIGRAM_POWER) / words_tot;
     }
   }
-  cudaMemcpy(table, tbl_, UNIGRAM_SIZE * sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(table, tbl_, UNIGRAM_SIZE * sizeof(size_t),
+             cudaMemcpyHostToDevice);
 }

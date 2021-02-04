@@ -44,8 +44,8 @@ static std::vector<size_t> FileToDocs(const Vocab &vocab, std::string f,
     std::stringstream ss(ln);
     std::string w;
     while (ss >> w) {
-      if (vocab.contain(w)) {
-        tmp.push_back(vocab.get_id(w));
+      if (vocab.Contain(w)) {
+        tmp.push_back(vocab.GetId(w));
       }
     }
     pivot.push_back(tmp.size() - pv);
@@ -223,7 +223,7 @@ static void SaveEmbedding(std::string f, llf *syn0, const Vocab &vocab,
   std::fstream fs(f);
   fs << vocab.size() << layer_size << '\n';
   for (size_t i = 0; i < vocab.size(); ++i) {
-    fs << vocab.get_word(i);
+    fs << vocab.GetWord(i);
     for (size_t j = 0; j < layer_size; ++j)
       fs << ' ' << syn0[i * layer_size + j];
     fs << '\n';
@@ -260,7 +260,7 @@ void TrainModel(const Vocab &vocab, const ModelConfig &conf,
   cudaMallocManaged(&sen_lens, (mx_len + SAMPLE_DOC_THREAD - 1) /
                                    SAMPLE_DOC_THREAD * sizeof(int));
 
-  const llu total_train_word = conf.iterations * vocab.get_total_count();
+  const llu total_train_word = conf.iterations * vocab.GetTotalCount();
   llu cur_train_word = 0;
   for (llu it = 0; it < conf.iterations; ++it) {
     if (debug > 0) {
@@ -274,7 +274,7 @@ void TrainModel(const Vocab &vocab, const ModelConfig &conf,
       SampleDoc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
                   SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
           doc, pt, conf.sample_rate, conf.rp_sample, words,
-          vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
+          vocab.GetTotalCount(), rnd(), sen, sen_sample, sen_lens);
       int sen_len = 0;
       for (int i = 0; i < (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD; ++i)
         sen_len += sen_lens[i];
@@ -343,12 +343,12 @@ void PredictModel(llf *syn0, llf sr, const size_t layer_size,
   for (auto pt : pvt) {
     SampleDoc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
                 SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
-        docs, pt, sr, 0, words, vocab.get_total_count(), rnd(), sen, sen_sample,
+        docs, pt, sr, 0, words, vocab.GetTotalCount(), rnd(), sen, sen_sample,
         sen_lens);
     int sen_len = 0;
     for (int i = 0; i < (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD; ++i)
       sen_len += sen_lens[i];
-    Doc2Vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
+    Doc2vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
     for (size_t i = 0; i < layer_size; ++i) {
       fs << neu1[i] << "　\n"[i + 1 == layer_size];
     }

@@ -14,19 +14,19 @@ class Vocab {
   uint64_t vocab_count_;
 
  public:
-  void add(const std::string&);
-  bool contain(const std::string&) const;
-  std::string get_word(size_t) const;
-  size_t get_id(const std::string&) const;
   size_t size() const noexcept;
-  void conclude();
-  void reduce(uint64_t);
-  uint64_t build_from_file(const std::string&);
-  uint64_t restore_from_saved_file(const std::string&);
-  void save_to_file(const std::string&) const;
-  std::vector<uint64_t> get_count() const noexcept;
-  uint64_t get_count(size_t) const;
-  uint64_t get_total_count() const noexcept;
+  void Add(const std::string&);
+  bool Contain(const std::string&) const;
+  std::string GetWord(size_t) const;
+  size_t GetId(const std::string&) const;
+  void Sort();
+  void Reduce(uint64_t);
+  uint64_t BuildFromFile(const std::string&);
+  uint64_t RestoreFromSavedFile(const std::string&);
+  void SaveToFile(const std::string&) const;
+  std::vector<uint64_t> GetCounts() const noexcept;
+  uint64_t GetCount(size_t) const;
+  uint64_t GetTotalCount() const noexcept;
 };
 
 #endif

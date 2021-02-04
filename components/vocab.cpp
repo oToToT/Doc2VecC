@@ -13,17 +13,17 @@ extern int debug;
 
 size_t Vocab::size() const noexcept { return words_.size(); }
 
-bool Vocab::contain(const std::string& s) const {
+bool Vocab::Contain(const std::string& s) const {
   return words_index_.find(s) != words_index_.end();
 }
 
-size_t Vocab::get_id(const std::string& s) const {
+size_t Vocab::GetId(const std::string& s) const {
   return words_index_.find(s)->second;
 }
 
-std::string Vocab::get_word(size_t i) const { return words_[i]; }
+std::string Vocab::GetWord(size_t i) const { return words_[i]; }
 
-void Vocab::add(const std::string& s) {
+void Vocab::Add(const std::string& s) {
   if (words_index_.find(s) == words_index_.end()) {
     words_index_[s] = words_.size();
     words_count_.push_back(0);
@@ -32,7 +32,7 @@ void Vocab::add(const std::string& s) {
   words_count_[words_index_[s]] += 1;
 }
 
-void Vocab::conclude() {
+void Vocab::Sort() {
   std::vector<std::pair<llu, std::string>> c;
   c.reserve(size());
   for (const auto& it : words_index_) {
@@ -55,8 +55,8 @@ void Vocab::conclude() {
   words_ = std::move(new_words);
 }
 
-void Vocab::reduce(llu reduce_cnt) {
-  conclude();
+void Vocab::Reduce(llu reduce_cnt) {
+  Sort();
   size_t reduce_size;
   for (reduce_size = 0; reduce_size < words_.size(); ++reduce_size) {
     if (words_count_[reduce_size] < reduce_cnt) {
@@ -72,7 +72,7 @@ void Vocab::reduce(llu reduce_cnt) {
                                  static_cast<uint64_t>(0));
 }
 
-llu Vocab::build_from_file(const std::string& filename) {
+llu Vocab::BuildFromFile(const std::string& filename) {
   std::fstream fs(filename);
   if (fs.fail()) {
     std::cerr << "Error while reading " << filename << std::endl;
@@ -81,7 +81,7 @@ llu Vocab::build_from_file(const std::string& filename) {
   vocab_count_ = 0;
   std::string w;
   while (fs >> w) {
-    add(w);
+    Add(w);
     vocab_count_++;
     if (debug > 1 && vocab_count_ % 10000 == 0) {
       std::cout << "Reading " << vocab_count_ / 1000 << "K\r";
@@ -91,7 +91,7 @@ llu Vocab::build_from_file(const std::string& filename) {
   return vocab_count_;
 }
 
-llu Vocab::restore_from_saved_file(const std::string& filename) {
+llu Vocab::RestoreFromSavedFile(const std::string& filename) {
   std::fstream fs(filename, std::ios_base::binary | std::ios_base::in);
   if (fs.fail()) {
     std::cerr << "Error while reading " << filename << std::endl;
@@ -109,7 +109,7 @@ llu Vocab::restore_from_saved_file(const std::string& filename) {
   return vocab_count_;
 }
 
-void Vocab::save_to_file(const std::string& filename) const {
+void Vocab::SaveToFile(const std::string& filename) const {
   std::fstream fs(filename, std::ios_base::binary | std::ios_base::out |
                                 std::ios_base::trunc);
   if (fs.fail()) {
@@ -121,8 +121,8 @@ void Vocab::save_to_file(const std::string& filename) const {
   }
 }
 
-std::vector<llu> Vocab::get_count() const noexcept { return words_count_; }
+std::vector<llu> Vocab::GetCounts() const noexcept { return words_count_; }
 
-llu Vocab::get_count(size_t i) const { return words_count_[i]; }
+llu Vocab::GetCount(size_t i) const { return words_count_[i]; }
 
-llu Vocab::get_total_count() const noexcept { return vocab_count_; }
+llu Vocab::GetTotalCount() const noexcept { return vocab_count_; }
