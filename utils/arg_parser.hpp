@@ -7,7 +7,7 @@
 
 class ArgParser {
  private:
-  std::unordered_map<std::string, std::string> result;
+  std::unordered_map<std::string, std::string> result_;
 
  public:
   void add_argument(std::string, std::string = "");

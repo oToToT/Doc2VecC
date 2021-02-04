@@ -8,10 +8,10 @@
 #include <vector>
 
 class Vocab {
-  std::vector<std::string> words;
-  std::vector<uint64_t> words_count;
-  std::unordered_map<std::string, size_t> words_index;
-  uint64_t vocab_count;
+  std::vector<std::string> words_;
+  std::vector<uint64_t> words_count_;
+  std::unordered_map<std::string, size_t> words_index_;
+  uint64_t vocab_count_;
 
  public:
   void add(const std::string&);
