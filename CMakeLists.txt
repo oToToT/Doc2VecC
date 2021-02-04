@@ -9,10 +9,10 @@ list(APPEND CUDA_NVCC_FLAGS ${CUDA_ARCH_FLAGS})
 cuda_add_library(
     doc2vecc_lib STATIC
     model.cu
-    arg_parser.cpp
-    vocab.cpp
-    huffman.cu
-    unigram.cu
+    utils/arg_parser.cpp
+    components/vocab.cpp
+    libs/huffman.cu
+    libs/unigram.cu
 )
  
 # Request that particles be built with -std=c++14
@@ -25,7 +25,7 @@ target_compile_features(doc2vecc_lib PUBLIC cxx_std_14)
 # could be called by other libraries and executables
 set_target_properties(doc2vecc_lib PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
  
-add_executable(doc2vecc doc2vecc.cu)
+add_executable(doc2vecc doc2vecc.cpp)
  
 #set_property(TARGET doc2vecc PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(doc2vecc PRIVATE doc2vecc_lib)

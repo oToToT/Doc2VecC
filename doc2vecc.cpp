@@ -1,6 +1,6 @@
-#include "arg_parser.hpp"
+#include "utils/arg_parser.hpp"
 #include "huffman.hpp"
-#include "vocab.hpp"
+#include "components/vocab.hpp"
 #include "model.hpp"
 #include "model_config.hpp"
 #include <iostream>
