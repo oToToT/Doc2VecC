@@ -11,7 +11,8 @@ using llu = uint64_t;
 
 extern int debug;
 
-void build_binary_tree(const Vocab& vocab, VocabWord*& words) {
+void build_binary_tree(const Vocab& vocab, VocabWord** words_ptr) {
+  VocabWord*& words = *words_ptr;
   if (debug > 1) {
     std::cout << "Building Huffman Tree." << std::endl;
   }
@@ -22,20 +23,27 @@ void build_binary_tree(const Vocab& vocab, VocabWord*& words) {
   size_t ctr = vocab_cnt.size();
   std::queue<std::pair<llu, size_t>> qu;
   auto top = [&qu, &vocab_cnt]() -> std::pair<llu, size_t> {
-    if (vocab_cnt.empty()) return qu.front();
-    if (qu.empty()) return {vocab_cnt.back(), vocab_cnt.size() - 1};
-    if (qu.front().first < vocab_cnt.back()) return qu.front();
+    if (vocab_cnt.empty()) {
+      return qu.front();
+    }
+    if (qu.empty()) {
+      return {vocab_cnt.back(), vocab_cnt.size() - 1};
+    }
+    if (qu.front().first < vocab_cnt.back()) {
+      return qu.front();
+    }
     return {vocab_cnt.back(), vocab_cnt.size() - 1};
   };
   auto pop = [&qu, &vocab_cnt]() {
-    if (qu.empty())
+    if (qu.empty()) {
       vocab_cnt.pop_back();
-    else if (vocab_cnt.empty())
+    } else if (vocab_cnt.empty()) {
       qu.pop();
-    else if (qu.front().first < vocab_cnt.back())
+    } else if (qu.front().first < vocab_cnt.back()) {
       qu.pop();
-    else
+    } else {
       vocab_cnt.pop_back();
+    }
   };
   while (qu.size() + vocab_cnt.size() > 1) {
     auto m1 = top();
@@ -45,7 +53,7 @@ void build_binary_tree(const Vocab& vocab, VocabWord*& words) {
     pa[m1.second] = ctr;
     pa[m2.second] = ctr;
     b_code[m2.second] = 1;
-    qu.push({m1.first + m2.first, ctr++});
+    qu.emplace(m1.first + m2.first, ctr++);
   }
 
   for (size_t i = 0; i < vocab.size(); ++i) {

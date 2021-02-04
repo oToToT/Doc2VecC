@@ -1,8 +1,10 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
+#include <device_functions.h>
 
 #include <algorithm>
 #include <cinttypes>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -10,7 +12,6 @@
 #include <random>
 #include <sstream>
 
-#include "libs/huffman.hpp"
 #include "libs/sigmoid.hpp"
 #include "libs/unigram.hpp"
 #include "model.hpp"
@@ -35,7 +36,8 @@ std::vector<size_t> file_to_docs(const Vocab &vocab, std::string f,
     std::cout << "Converting train file to indices." << std::endl;
   }
   size_t pv = 0;
-  std::vector<size_t> tmp, pivot;
+  std::vector<size_t> tmp;
+  std::vector<size_t> pivot;
   std::fstream fs(f);
   std::string ln;
   while (std::getline(fs, ln)) {
@@ -77,13 +79,14 @@ void init_net(llf *&syn0, llf *&syn1, const ModelConfig &conf,
 __constant__ llf sigmoid[SIGMOID_TABLE_SIZE + 1];
 
 void init_sigmoid() {
-  llf sigTbl[SIGMOID_TABLE_SIZE + 1];
+  std::array<llf, SIGMOID_TABLE_SIZE + 1> sigmoid_table;
   for (size_t i = 0; i <= SIGMOID_TABLE_SIZE; ++i) {
-    sigTbl[i] =
-        exp((static_cast<llf>(i) / SIGMOID_TABLE_SIZE * 2 - 1) * MAX_EXP);
-    sigTbl[i] = sigTbl[i] / (sigTbl[i] + 1);
+    sigmoid_table[i] =
+        std::exp((static_cast<llf>(i) / SIGMOID_TABLE_SIZE * 2 - 1) * MAX_EXP);
+    sigmoid_table[i] = sigmoid_table[i] / (sigmoid_table[i] + 1);
   }
-  cudaMemcpyToSymbol(sigmoid, sigTbl, (SIGMOID_TABLE_SIZE + 1) * sizeof(llf));
+  cudaMemcpyToSymbol(sigmoid, sigmoid_table.data(),
+                     (SIGMOID_TABLE_SIZE + 1) * sizeof(llf));
 }
 
 __global__ void sample_doc(const size_t *doc, const size_t n, const llf s,
@@ -236,7 +239,7 @@ void train_model(const Vocab &vocab, const ModelConfig &conf,
 
   size_t *unigram;
   if (conf.negative_sample > 0) {
-    init_unigram_table(vocab, unigram);
+    init_unigram_table(vocab, &unigram);
   }
 
   llf *syn1;

@@ -11,8 +11,8 @@ class ArgParser {
 
  public:
   void add_argument(std::string, std::string = "");
-  void parse_arg(int, const char *[]);
-  std::string getopt(std::string);
+  void parse_arg(int, const char **);
+  std::string getopt(std::string) const;
 };
 
 #endif

@@ -11,6 +11,9 @@
 using llf = double;
 using llu = uint64_t;
 
+const llf kDefaultCBOWLearningRate = 0.05;
+const llf kDefaultSkipGramLearningRate = 0.025;
+
 int gpu_id, debug;
 llu min_count;
 std::string vocab_output, vocab_source, output_file, test_file;
@@ -88,7 +91,7 @@ ArgParser get_parser() {
   return parser;
 }
 
-ModelConfig parse_args(ArgParser &arg_parser) {
+ModelConfig parse_args(const ArgParser &arg_parser) {
   vocab_output = arg_parser.getopt("-save-vocab");
   vocab_source = arg_parser.getopt("-read-vocab");
   output_file = arg_parser.getopt("-output");
@@ -102,23 +105,24 @@ ModelConfig parse_args(ArgParser &arg_parser) {
   conf.layer_size = stoi(arg_parser.getopt("-size"));
   conf.window_size = stoi(arg_parser.getopt("-window"));
   conf.sample_rate = stod(arg_parser.getopt("-sample"));
-  conf.hierarchical_softmax = stoi(arg_parser.getopt("-hs"));
+  conf.hierarchical_softmax = static_cast<bool>(stoi(arg_parser.getopt("-hs")));
   conf.negative_sample = stoi(arg_parser.getopt("-negative"));
   conf.iterations = stoull(arg_parser.getopt("-iter"));
-  conf.cbow = stoi(arg_parser.getopt("-cbow"));
-  if (conf.cbow)
-    conf.alpha = 0.05;
-  else
-    conf.alpha = 0.025;
-  if (arg_parser.getopt("-alpha") != "") {
+  conf.cbow = static_cast<bool>(stoi(arg_parser.getopt("-cbow")));
+  if (conf.cbow) {
+    conf.alpha = kDefaultCBOWLearningRate;
+  } else {
+    conf.alpha = kDefaultSkipGramLearningRate;
+  }
+  if (not arg_parser.getopt("-alpha").empty()) {
     conf.alpha = stod(arg_parser.getopt("-alpha"));
   }
-  conf.binary = stoi(arg_parser.getopt("-binary"));
+  conf.binary = static_cast<bool>(stoi(arg_parser.getopt("-binary")));
   conf.rp_sample = stod(arg_parser.getopt("-sentence-sample"));
   return conf;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int argc, const char **argv) {
   if (argc == 1) {
     print_usage();
     return 0;
@@ -130,24 +134,29 @@ int main(int argc, const char *argv[]) {
   Vocab vocab;
 
   llu words_count = 0;
-  if (vocab_source == "")
-    words_count = vocab.build_from_file(conf.train_file);
-  else
+  if (not vocab_source.empty()) {
     words_count = vocab.read_from_file(vocab_source);
+  } else {
+    words_count = vocab.build_from_file(conf.train_file);
+  }
   vocab.reduce(min_count);
   vocab.conclude();
   std::cout << "Vocab size: " << vocab.size() << "      \n";
   std::cout << "Words in train file: " << words_count << std::endl;
 
-  if (vocab_output != "") vocab.save_to_file(vocab_output);
-  if (output_file == "") return 0;
+  if (not vocab_output.empty()) {
+    vocab.save_to_file(vocab_output);
+  }
+  if (output_file.empty()) {
+    return 0;
+  }
 
   VocabWord *words;
-  build_binary_tree(vocab, words);
+  build_binary_tree(vocab, &words);
 
   llf *model;
   train_model(vocab, conf, words, model);
-  predict_model(model, conf.layer_size, conf.sample_rate, vocab, words,
+  predict_model(model, conf.sample_rate, conf.layer_size, vocab, words,
                 test_file, output_file);
   return 0;
 }

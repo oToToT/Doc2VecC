@@ -13,6 +13,6 @@ struct VocabWord {
   uint64_t cnt;
 };
 
-void build_binary_tree(const Vocab &, VocabWord *&);
+void build_binary_tree(const Vocab &, VocabWord **);
 
 #endif
