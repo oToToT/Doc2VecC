@@ -1,11 +1,12 @@
-#include "utils/arg_parser.hpp"
-#include "libs/huffman.hpp"
-#include "components/vocab.hpp"
-#include "model.hpp"
-#include "components/model_config.hpp"
-#include <iostream>
-#include <cstdlib>
 #include <cinttypes>
+#include <cstdlib>
+#include <iostream>
+
+#include "components/model_config.hpp"
+#include "components/vocab.hpp"
+#include "libs/huffman.hpp"
+#include "model.hpp"
+#include "utils/arg_parser.hpp"
 
 using llf = double;
 using llu = uint64_t;
@@ -15,7 +16,7 @@ llu min_count;
 std::string vocab_output, vocab_source, output_file, test_file;
 
 void print_usage() {
-    std::cout << R"(GPU accelerated Doc2VecC implementation
+  std::cout << R"(GPU accelerated Doc2VecC implementation
 
 Options:
 Parameters for training:
@@ -60,87 +61,93 @@ Parameters for training:
         The size limit of vocabulary dictionary; default is 21000000
 
 Examples:
-./doc2vecc -train data.txt -output docvec.txt -word wordvec.txt -sentence-sample 0.1 -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3)" << std::endl;
+./doc2vecc -train data.txt -output docvec.txt -word wordvec.txt -sentence-sample 0.1 -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3)"
+            << std::endl;
 }
 ArgParser get_parser() {
-    ArgParser parser;
-    parser.add_argument("-train", "data.txt");
-    parser.add_argument("-word", "wordvec.txt");
-    parser.add_argument("-output", "docvec.txt");
-    parser.add_argument("-test", "test.txt");
-    parser.add_argument("-size", "100");
-    parser.add_argument("-window", "5");
-    parser.add_argument("-sample", "1e-3");
-    parser.add_argument("-hs", "0");
-    parser.add_argument("-negative", "5");
-    parser.add_argument("-iter", "10");
-    parser.add_argument("-min-count", "5");
-    parser.add_argument("-alpha");
-    parser.add_argument("-debug", "2");
-    parser.add_argument("-binary", "0");
-    parser.add_argument("-save-vocab");
-    parser.add_argument("-read-vocab");
-    parser.add_argument("-cbow", "1");
-    parser.add_argument("-sentence-sample", "0.1");
-    parser.add_argument("-vocab-limit", "21000000");
-    return parser;
+  ArgParser parser;
+  parser.add_argument("-train", "data.txt");
+  parser.add_argument("-word", "wordvec.txt");
+  parser.add_argument("-output", "docvec.txt");
+  parser.add_argument("-test", "test.txt");
+  parser.add_argument("-size", "100");
+  parser.add_argument("-window", "5");
+  parser.add_argument("-sample", "1e-3");
+  parser.add_argument("-hs", "0");
+  parser.add_argument("-negative", "5");
+  parser.add_argument("-iter", "10");
+  parser.add_argument("-min-count", "5");
+  parser.add_argument("-alpha");
+  parser.add_argument("-debug", "2");
+  parser.add_argument("-binary", "0");
+  parser.add_argument("-save-vocab");
+  parser.add_argument("-read-vocab");
+  parser.add_argument("-cbow", "1");
+  parser.add_argument("-sentence-sample", "0.1");
+  parser.add_argument("-vocab-limit", "21000000");
+  return parser;
 }
 
-ModelConfig parse_args(ArgParser& arg_parser) {
-    vocab_output = arg_parser.getopt("-save-vocab");
-    vocab_source = arg_parser.getopt("-read-vocab");
-    output_file = arg_parser.getopt("-output");
-    test_file = arg_parser.getopt("-test");
-    debug = stoi(arg_parser.getopt("-debug"));
-    min_count = stoull(arg_parser.getopt("-min-count"));
-    
-    ModelConfig conf;
-    conf.train_file = arg_parser.getopt("-train");
-    conf.wordembedding_file = arg_parser.getopt("-word");
-    conf.layer_size = stoi(arg_parser.getopt("-size"));
-    conf.window_size = stoi(arg_parser.getopt("-window"));
-    conf.sample_rate = stod(arg_parser.getopt("-sample"));
-    conf.hierarchical_softmax = stoi(arg_parser.getopt("-hs"));
-    conf.negative_sample = stoi(arg_parser.getopt("-negative"));
-    conf.iterations = stoull(arg_parser.getopt("-iter"));
-    conf.cbow = stoi(arg_parser.getopt("-cbow"));
-    if (conf.cbow) conf.alpha = 0.05;
-    else conf.alpha = 0.025;
-    if (arg_parser.getopt("-alpha") != "") {
-        conf.alpha = stod(arg_parser.getopt("-alpha"));
-    }
-    conf.binary = stoi(arg_parser.getopt("-binary"));
-    conf.rp_sample = stod(arg_parser.getopt("-sentence-sample"));
-    return conf;
+ModelConfig parse_args(ArgParser &arg_parser) {
+  vocab_output = arg_parser.getopt("-save-vocab");
+  vocab_source = arg_parser.getopt("-read-vocab");
+  output_file = arg_parser.getopt("-output");
+  test_file = arg_parser.getopt("-test");
+  debug = stoi(arg_parser.getopt("-debug"));
+  min_count = stoull(arg_parser.getopt("-min-count"));
+
+  ModelConfig conf;
+  conf.train_file = arg_parser.getopt("-train");
+  conf.wordembedding_file = arg_parser.getopt("-word");
+  conf.layer_size = stoi(arg_parser.getopt("-size"));
+  conf.window_size = stoi(arg_parser.getopt("-window"));
+  conf.sample_rate = stod(arg_parser.getopt("-sample"));
+  conf.hierarchical_softmax = stoi(arg_parser.getopt("-hs"));
+  conf.negative_sample = stoi(arg_parser.getopt("-negative"));
+  conf.iterations = stoull(arg_parser.getopt("-iter"));
+  conf.cbow = stoi(arg_parser.getopt("-cbow"));
+  if (conf.cbow)
+    conf.alpha = 0.05;
+  else
+    conf.alpha = 0.025;
+  if (arg_parser.getopt("-alpha") != "") {
+    conf.alpha = stod(arg_parser.getopt("-alpha"));
+  }
+  conf.binary = stoi(arg_parser.getopt("-binary"));
+  conf.rp_sample = stod(arg_parser.getopt("-sentence-sample"));
+  return conf;
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc == 1) {
-        print_usage();
-        return 0;
-    }
-    ArgParser arg_parser = get_parser();
-    arg_parser.parse_arg(argc, argv);
-    ModelConfig conf = parse_args(arg_parser);
-
-    Vocab vocab;
-    
-    llu words_count = 0;
-    if (vocab_source == "") words_count = vocab.build_from_file(conf.train_file);
-    else words_count = vocab.read_from_file(vocab_source);
-    vocab.reduce(min_count);
-    vocab.conclude();
-    std::cout << "Vocab size: " << vocab.size() << "      \n";
-    std::cout << "Words in train file: " << words_count << std::endl;
-
-    if (vocab_output != "") vocab.save_to_file(vocab_output);
-    if (output_file == "") return 0;
-
-    VocabWord *words;
-    build_binary_tree(vocab, words);
-
-    llf *model;
-    train_model(vocab, conf, words, model);
-    predict_model(model, conf.layer_size, conf.sample_rate, vocab, words, test_file, output_file);
+  if (argc == 1) {
+    print_usage();
     return 0;
+  }
+  ArgParser arg_parser = get_parser();
+  arg_parser.parse_arg(argc, argv);
+  ModelConfig conf = parse_args(arg_parser);
+
+  Vocab vocab;
+
+  llu words_count = 0;
+  if (vocab_source == "")
+    words_count = vocab.build_from_file(conf.train_file);
+  else
+    words_count = vocab.read_from_file(vocab_source);
+  vocab.reduce(min_count);
+  vocab.conclude();
+  std::cout << "Vocab size: " << vocab.size() << "      \n";
+  std::cout << "Words in train file: " << words_count << std::endl;
+
+  if (vocab_output != "") vocab.save_to_file(vocab_output);
+  if (output_file == "") return 0;
+
+  VocabWord *words;
+  build_binary_tree(vocab, words);
+
+  llf *model;
+  train_model(vocab, conf, words, model);
+  predict_model(model, conf.layer_size, conf.sample_rate, vocab, words,
+                test_file, output_file);
+  return 0;
 }
