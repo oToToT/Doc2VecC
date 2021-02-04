@@ -21,7 +21,7 @@ shuf alldata.txt > alldata-shuf.txt
 cd ..
 
 cd build
-cmake .. && make
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 cd ..
 # this script trains on all the data (train/test/unsup), you could also remove the test documents from the learning of word/document representation

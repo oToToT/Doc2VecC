@@ -18,7 +18,7 @@ You should check the original implementation for more detail.
 ```bash
 git clone https://github.com/oToToT/Doc2VecC
 cd Doc2VecC/build
-cmake .. && make
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
 
 ### Usage ###
