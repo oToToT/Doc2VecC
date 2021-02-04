@@ -1,6 +1,5 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
-#include <device_functions.h>
 
 #include <algorithm>
 #include <cinttypes>
