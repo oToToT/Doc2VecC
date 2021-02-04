@@ -22,7 +22,7 @@ class Vocab {
   void conclude();
   void reduce(uint64_t);
   uint64_t build_from_file(const std::string&);
-  uint64_t read_from_file(const std::string&);
+  uint64_t restore_from_saved_file(const std::string&);
   void save_to_file(const std::string&) const;
   std::vector<uint64_t> get_count() const noexcept;
   uint64_t get_count(size_t) const;

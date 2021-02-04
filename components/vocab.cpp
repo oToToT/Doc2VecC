@@ -51,22 +51,25 @@ void Vocab::conclude() {
     new_words.push_back(it.second);
     words_index_[it.second] = new_count.size() - 1;
   }
-  words_count_ = new_count;
-  words_ = new_words;
+  words_count_ = std::move(new_count);
+  words_ = std::move(new_words);
 }
 
 void Vocab::reduce(llu reduce_cnt) {
   conclude();
   size_t reduce_size;
   for (reduce_size = 0; reduce_size < words_.size(); ++reduce_size) {
-    if (words_count_[reduce_size] < reduce_cnt) break;
+    if (words_count_[reduce_size] < reduce_cnt) {
+      break;
+    }
   }
   for (size_t i = reduce_size; i < words_.size(); ++i) {
     words_index_.erase(words_[i]);
   }
   words_count_.resize(reduce_size);
   words_.resize(reduce_size);
-  vocab_count_ = std::accumulate(words_count_.begin(), words_count_.end(), 0);
+  vocab_count_ = std::accumulate(words_count_.begin(), words_count_.end(),
+                                 static_cast<uint64_t>(0));
 }
 
 llu Vocab::build_from_file(const std::string& filename) {
@@ -88,7 +91,7 @@ llu Vocab::build_from_file(const std::string& filename) {
   return vocab_count_;
 }
 
-llu Vocab::read_from_file(const std::string& filename) {
+llu Vocab::restore_from_saved_file(const std::string& filename) {
   std::fstream fs(filename, std::ios_base::binary | std::ios_base::in);
   if (fs.fail()) {
     std::cerr << "Error while reading " << filename << std::endl;

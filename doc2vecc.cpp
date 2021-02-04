@@ -135,7 +135,7 @@ int main(int argc, const char **argv) {
 
   llu words_count = 0;
   if (not vocab_source.empty()) {
-    words_count = vocab.read_from_file(vocab_source);
+    words_count = vocab.restore_from_saved_file(vocab_source);
   } else {
     words_count = vocab.build_from_file(conf.train_file);
   }
