@@ -5,14 +5,14 @@ normalize_text() {
     -e 's/\;/ \; /g' -e 's/\:/ \: /g' > "$1"-norm
 }
 
-wget http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz
+wget http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz -O aclImdb_v1.tar.gz
 tar -xf aclImdb_v1.tar.gz
 ## normalize the data
 cd aclImdb || (echo 'aclImdb directory not found' && exit 1)
 for j in train/pos train/neg test/pos test/neg train/unsup; do
     rm -f temp
     rm -f $j/norm.txt
-    for i in "$j"/*; do cat "$j"/"$i" >> temp; awk 'BEGIN{print;}' >> temp; done
+    for i in "$j"/*; do cat "$i" >> temp; echo '' >> temp; done
     normalize_text temp
     mv temp-norm $j/norm.txt
 done
