@@ -16,7 +16,7 @@ class Vocab {
  public:
   void add(const std::string&);
   bool contain(const std::string&) const;
-  std::string get_word(const size_t) const;
+  std::string get_word(size_t) const;
   size_t get_id(const std::string&) const;
   size_t size() const noexcept;
   void conclude();

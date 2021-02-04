@@ -21,7 +21,7 @@ size_t Vocab::get_id(const std::string& s) const {
   return words_index.find(s)->second;
 }
 
-std::string Vocab::get_word(const size_t i) const { return words[i]; }
+std::string Vocab::get_word(size_t i) const { return words[i]; }
 
 void Vocab::add(const std::string& s) {
   if (words_index.find(s) == words_index.end()) {
@@ -40,8 +40,8 @@ void Vocab::conclude() {
   }
   std::sort(
       c.begin(), c.end(),
-      [](const std::pair<llu, std::string> a,
-         const std::pair<llu, std::string> b) { return a.first > b.first; });
+      [](const std::pair<llu, std::string>& a,
+         const std::pair<llu, std::string>& b) { return a.first > b.first; });
   std::vector<llu> new_count;
   std::vector<std::string> new_words;
   new_count.reserve(size());
