@@ -1,17 +1,18 @@
-function normalize_text {
-    awk '{print tolower($0);}' < $1 | LC_ALL=C sed -e 's/\./ \. /g' -e 's/<br \/>/ /g' -e 's/"/ " /g' \
+#!/bin/bash
+normalize_text() {
+    awk '{print tolower($0);}' < "$1" | LC_ALL=C sed -e 's/\./ \. /g' -e 's/<br \/>/ /g' -e 's/"/ " /g' \
     -e 's/,/ , /g' -e 's/(/ ( /g' -e 's/)/ ) /g' -e 's/\!/ \! /g' -e 's/\?/ \? /g' \
-    -e 's/\;/ \; /g' -e 's/\:/ \: /g' > $1-norm
+    -e 's/\;/ \; /g' -e 's/\:/ \: /g' > "$1"-norm
 }
 
 wget http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz
 tar -xf aclImdb_v1.tar.gz
 ## normalize the data
-cd aclImdb
+cd aclImdb || (echo 'aclImdb directory not found' && exit 1)
 for j in train/pos train/neg test/pos test/neg train/unsup; do
     rm -f temp
     rm -f $j/norm.txt
-    for i in `ls $j`; do cat $j/$i >> temp; awk 'BEGIN{print;}' >> temp; done
+    for i in "$j"/*; do cat "$j"/"$i" >> temp; awk 'BEGIN{print;}' >> temp; done
     normalize_text temp
     mv temp-norm $j/norm.txt
 done
@@ -20,7 +21,7 @@ cat train/pos/norm.txt train/neg/norm.txt train/unsup/norm.txt test/pos/norm.txt
 shuf alldata.txt > alldata-shuf.txt
 cd ..
 
-cd build
+cd build || (echo 'build directory not found' && exit 1)
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 cd ..
