@@ -1,7 +1,7 @@
 #ifndef UNIGRAM_H
 #define UNIGRAM_H
 
-#include "vocab.hpp"
+#include "../components/vocab.hpp"
 
 #define UNIGRAM_SIZE 100000000
 #define UNIGRAM_POWER  0.75

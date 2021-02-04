@@ -1,7 +1,7 @@
 #ifndef HUFFMAN_H
 #define HUFFMAN_H
 
-#include "vocab.hpp"
+#include "../components/vocab.hpp"
 #include <cinttypes>
 #include <cstddef>
 

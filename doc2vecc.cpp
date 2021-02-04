@@ -1,12 +1,11 @@
 #include "utils/arg_parser.hpp"
-#include "huffman.hpp"
+#include "libs/huffman.hpp"
 #include "components/vocab.hpp"
 #include "model.hpp"
-#include "model_config.hpp"
+#include "components/model_config.hpp"
 #include <iostream>
 #include <cstdlib>
 #include <cinttypes>
-#include <cuda_runtime.h>
 
 using llf = double;
 using llu = uint64_t;

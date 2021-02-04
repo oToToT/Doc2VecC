@@ -1,7 +1,7 @@
 #include "model.hpp"
-#include "huffman.hpp"
-#include "unigram.hpp"
-#include "sigmoid.hpp"
+#include "libs/huffman.hpp"
+#include "libs/unigram.hpp"
+#include "libs/sigmoid.hpp"
 #include <limits>
 #include <random>
 #include <iostream>
