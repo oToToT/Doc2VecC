@@ -29,8 +29,8 @@ Parameters for training:
 		Use <file> to save the resulting word vectors; default is wordvec.txt
 	-output <file>
 		Use <file> to save the resulting document vectors; default is docvec.txt
-    -test <file>
-        Predict text data from <file> with model; default is test.txt
+	-test <file>
+		Predict text data from <file> with model; default is test.txt
 	-size <int>
 		Set size of word vectors; default is 100
 	-window <int>
@@ -157,6 +157,6 @@ int main(int argc, const char **argv) {
   llf *model;
   TrainModel(vocab, conf, words, model);
   PredictModel(model, conf.sample_rate, conf.layer_size, vocab, words,
-                test_file, output_file);
+               test_file, output_file);
   return 0;
 }
