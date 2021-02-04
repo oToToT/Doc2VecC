@@ -30,8 +30,8 @@ static inline llu rnd() {
 }
 
 // could be parallelized?
-std::vector<size_t> file_to_docs(const Vocab &vocab, std::string f,
-                                 size_t *&docs) {
+static std::vector<size_t> FileToDocs(const Vocab &vocab, std::string f,
+                                      size_t *&docs) {
   if (debug > 1) {
     std::cout << "Converting train file to indices." << std::endl;
   }
@@ -60,8 +60,8 @@ std::vector<size_t> file_to_docs(const Vocab &vocab, std::string f,
   return pivot;
 }
 
-void init_net(llf *&syn0, llf *&syn1, const ModelConfig &conf,
-              size_t vocab_size) {
+static void InitNet(llf *&syn0, llf *&syn1, const ModelConfig &conf,
+                    size_t vocab_size) {
   cudaMallocManaged(&syn0, vocab_size * conf.layer_size * sizeof(llf));
   llu rnd = 1;
   for (size_t i = 0; i < vocab_size; ++i) {
@@ -78,7 +78,7 @@ void init_net(llf *&syn0, llf *&syn1, const ModelConfig &conf,
 
 __constant__ llf sigmoid[SIGMOID_TABLE_SIZE + 1];
 
-void init_sigmoid() {
+static void InitSigmoid() {
   std::array<llf, SIGMOID_TABLE_SIZE + 1> sigmoid_table;
   for (size_t i = 0; i <= SIGMOID_TABLE_SIZE; ++i) {
     sigmoid_table[i] =
@@ -89,10 +89,11 @@ void init_sigmoid() {
                      (SIGMOID_TABLE_SIZE + 1) * sizeof(llf));
 }
 
-__global__ void sample_doc(const size_t *doc, const size_t n, const llf s,
-                           const llf rp_sample, const VocabWord *w,
-                           const size_t total_count, const llu seed,
-                           size_t *sen, size_t *sen_sample, int *sen_len) {
+static __global__ void SampleDoc(const size_t *doc, const size_t n, const llf s,
+                                 const llf rp_sample, const VocabWord *w,
+                                 const size_t total_count, const llu seed,
+                                 size_t *sen, size_t *sen_sample,
+                                 int *sen_len) {
   extern __shared__ int shm[];
   shm[threadIdx.x] = 0;
 
@@ -125,8 +126,8 @@ __global__ void sample_doc(const size_t *doc, const size_t n, const llf s,
   }
 }
 
-__global__ void cbow(const size_t *sen, const size_t n, const size_t w,
-                     const int b, const int ws, llf *syn0, llf *neu1) {
+static __global__ void CBOW(const size_t *sen, const size_t n, const size_t w,
+                            const int b, const int ws, llf *syn0, llf *neu1) {
   const int c = (int)w + (int)blockIdx.x + b - ws;
   if (c < 0 or c >= n or sen[c] == INF or c == w) return;
   const int i = threadIdx.x;
@@ -134,9 +135,9 @@ __global__ void cbow(const size_t *sen, const size_t n, const size_t w,
   // atomicAdd(&neu1[i], syn0[sen[c] * ws + i]);
 }
 
-__global__ void cbow_back(const size_t *sen, const size_t n, const size_t w,
-                          const int b, const int ws, const int cw, llf *syn0,
-                          llf *neu1e) {
+static __global__ void CBOWBack(const size_t *sen, const size_t n,
+                                const size_t w, const int b, const int ws,
+                                const int cw, llf *syn0, llf *neu1e) {
   const int c = (int)w + (int)blockIdx.x + b - ws;
   if (c < 0 or c >= n or sen[c] == INF or c == w) return;
   const int i = threadIdx.x;
@@ -144,8 +145,8 @@ __global__ void cbow_back(const size_t *sen, const size_t n, const size_t w,
   // atomicAdd(&syn0[i + sen[c] * ws], neu1e[i] / cw);
 }
 
-__global__ void doc2vecc(const size_t *sen_sample, const size_t n, const llf w,
-                         llf *syn0, llf *neu1) {
+static __global__ void Doc2vecc(const size_t *sen_sample, const size_t n,
+                                const llf w, llf *syn0, llf *neu1) {
   const int c = blockIdx.x;
   if (sen_sample[c] == INF) return;
   const int i = threadIdx.x;
@@ -153,9 +154,8 @@ __global__ void doc2vecc(const size_t *sen_sample, const size_t n, const llf w,
   // atomicAdd(&neu1[i], w * syn0[i + sen_sample[c] * blockDim.x]);
 }
 
-__global__ void doc2vecc_back(const size_t *sen_sample, const size_t n,
-                              const llf w, const int cw, llf *syn0,
-                              llf *neu1e) {
+__global__ void Doc2veccBack(const size_t *sen_sample, const size_t n,
+                             const llf w, const int cw, llf *syn0, llf *neu1e) {
   const int c = blockIdx.x;
   if (sen_sample[c] == INF) return;
   const int i = threadIdx.x;
@@ -163,10 +163,10 @@ __global__ void doc2vecc_back(const size_t *sen_sample, const size_t n,
   // atomicAdd(&syn0[i + sen_sample[c] * blockDim.x], neu1e[i] * w / cw);
 }
 
-__global__ void negative_sampling(const size_t w, const llf alpha,
-                                  const size_t lsize, const llu seed,
-                                  size_t *uni, llf *syn1, llf *neu1,
-                                  llf *neu1e) {
+static __global__ void NegativeSampling(const size_t w, const llf alpha,
+                                        const size_t lsize, const llu seed,
+                                        size_t *uni, llf *syn1, llf *neu1,
+                                        llf *neu1e) {
   const int c = threadIdx.x;
 
   extern __shared__ llf sm[];
@@ -214,10 +214,12 @@ __global__ void negative_sampling(const size_t w, const llf alpha,
   }
 }
 
-__global__ void averaging(const int cw, llf *neu1) { neu1[threadIdx.x] /= cw; }
+static __global__ void averaging(const int cw, llf *neu1) {
+  neu1[threadIdx.x] /= cw;
+}
 
-void save_embedding(std::string f, llf *syn0, const Vocab &vocab,
-                    size_t layer_size) {
+static void SaveEmbedding(std::string f, llf *syn0, const Vocab &vocab,
+                          size_t layer_size) {
   std::fstream fs(f);
   fs << vocab.size() << layer_size << '\n';
   for (size_t i = 0; i < vocab.size(); ++i) {
@@ -228,13 +230,13 @@ void save_embedding(std::string f, llf *syn0, const Vocab &vocab,
   }
 }
 
-void train_model(const Vocab &vocab, const ModelConfig &conf,
-                 const VocabWord *words, llf *&syn0) {
+void TrainModel(const Vocab &vocab, const ModelConfig &conf,
+                const VocabWord *words, llf *&syn0) {
   size_t layer_size_2 = 1;
   while (layer_size_2 < conf.layer_size) layer_size_2 <<= 1;
 
   size_t *docs;
-  std::vector<size_t> pvt = file_to_docs(vocab, conf.train_file, docs);
+  std::vector<size_t> pvt = FileToDocs(vocab, conf.train_file, docs);
   size_t mx_len = *std::max_element(pvt.begin(), pvt.end());
 
   size_t *unigram;
@@ -243,9 +245,9 @@ void train_model(const Vocab &vocab, const ModelConfig &conf,
   }
 
   llf *syn1;
-  init_net(syn0, syn1, conf, vocab.size());
+  InitNet(syn0, syn1, conf, vocab.size());
 
-  init_sigmoid();
+  InitSigmoid();
 
   size_t *sen, *sen_sample;
   cudaMalloc(&sen, mx_len * sizeof(size_t));
@@ -269,8 +271,8 @@ void train_model(const Vocab &vocab, const ModelConfig &conf,
       cudaMemset(
           sen_lens, 0,
           (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD * sizeof(int));
-      sample_doc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
-                   SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
+      SampleDoc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
+                  SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
           doc, pt, conf.sample_rate, conf.rp_sample, words,
           vocab.get_total_count(), rnd(), sen, sen_sample, sen_lens);
       int sen_len = 0;
@@ -287,47 +289,47 @@ void train_model(const Vocab &vocab, const ModelConfig &conf,
         }
         cudaMemset(neu1, 0, conf.layer_size * sizeof(llf));
         cudaMemset(neu1e, 0, conf.layer_size * sizeof(llf));
-        doc2vecc<<<pt, conf.layer_size>>>(
+        Doc2vecc<<<pt, conf.layer_size>>>(
             sen_sample, pt, 1. / conf.rp_sample / sen_len, syn0, neu1);
         int cw = 2;
         if (conf.cbow) {
           int b = rnd() % conf.window_size;
           // this part is quite wrong...
           int blocks = conf.window_size * 2 - 2 * b + 1;
-          cbow<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size,
+          CBOW<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size,
                                             syn0, neu1);
           cw = std::max((int)i + conf.window_size - b + 1, (int)pt) -
                std::max((int)i - conf.window_size + b, 0);
           averaging<<<1, conf.layer_size>>>(cw, neu1);
           if (conf.hierarchical_softmax) {
           } else {
-            negative_sampling<<<conf.negative_sample, layer_size_2,
-                                (layer_size_2 + 1) * sizeof(llf)>>>(
+            NegativeSampling<<<conf.negative_sample, layer_size_2,
+                               (layer_size_2 + 1) * sizeof(llf)>>>(
                 i, alpha, conf.layer_size, rnd(), unigram, syn1, neu1, neu1e);
           }
-          cbow_back<<<blocks, conf.layer_size>>>(
-              doc, pt, i, b, conf.window_size, cw, syn0, neu1e);
+          CBOWBack<<<blocks, conf.layer_size>>>(doc, pt, i, b, conf.window_size,
+                                                cw, syn0, neu1e);
         } else {
           if (conf.hierarchical_softmax) {
           } else {
           }
         }
-        doc2vecc_back<<<pt, conf.layer_size>>>(
+        Doc2veccBack<<<pt, conf.layer_size>>>(
             sen_sample, pt, 1. / conf.rp_sample / sen_len, cw, syn0, neu1e);
         cur_train_word++;
       }
       doc += pt;
     }
   }
-  save_embedding(conf.wordembedding_file, syn0, vocab, conf.layer_size);
+  SaveEmbedding(conf.wordembedding_file, syn0, vocab, conf.layer_size);
 }
 
-void predict_model(llf *syn0, llf sr, const size_t layer_size,
-                   const Vocab &vocab, const VocabWord *words, std::string inp,
-                   std::string oup) {
+void PredictModel(llf *syn0, llf sr, const size_t layer_size,
+                  const Vocab &vocab, const VocabWord *words, std::string inp,
+                  std::string oup) {
   std::fstream fs(oup);
   size_t *docs, *sen_sample, *sen;
-  std::vector<size_t> pvt = file_to_docs(vocab, inp, docs);
+  std::vector<size_t> pvt = FileToDocs(vocab, inp, docs);
   size_t mx_len = *std::max_element(pvt.begin(), pvt.end());
   cudaMallocManaged(&sen, mx_len * sizeof(size_t));
   cudaMalloc(&sen_sample, mx_len * sizeof(size_t));
@@ -339,14 +341,14 @@ void predict_model(llf *syn0, llf sr, const size_t layer_size,
   cudaMallocManaged(&sen_lens, (mx_len + SAMPLE_DOC_THREAD - 1) /
                                    SAMPLE_DOC_THREAD * sizeof(int));
   for (auto pt : pvt) {
-    sample_doc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
-                 SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
+    SampleDoc<<<(pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD,
+                SAMPLE_DOC_THREAD, SAMPLE_DOC_THREAD * sizeof(int)>>>(
         docs, pt, sr, 0, words, vocab.get_total_count(), rnd(), sen, sen_sample,
         sen_lens);
     int sen_len = 0;
     for (int i = 0; i < (pt + SAMPLE_DOC_THREAD - 1) / SAMPLE_DOC_THREAD; ++i)
       sen_len += sen_lens[i];
-    doc2vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
+    Doc2Vecc<<<pt, layer_size>>>(sen_sample, pt, 1. / sen_len, syn0, neu1);
     for (size_t i = 0; i < layer_size; ++i) {
       fs << neu1[i] << "　\n"[i + 1 == layer_size];
     }

@@ -18,7 +18,7 @@ int gpu_id, debug;
 llu min_count;
 std::string vocab_output, vocab_source, output_file, test_file;
 
-void print_usage() {
+void PrintUsage() {
   std::cout << R"(GPU accelerated Doc2VecC implementation
 
 Options:
@@ -67,7 +67,7 @@ Examples:
 ./doc2vecc -train data.txt -output docvec.txt -word wordvec.txt -sentence-sample 0.1 -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3)"
             << std::endl;
 }
-ArgParser get_parser() {
+ArgParser GetParser() {
   ArgParser parser;
   parser.add_argument("-train", "data.txt");
   parser.add_argument("-word", "wordvec.txt");
@@ -91,7 +91,7 @@ ArgParser get_parser() {
   return parser;
 }
 
-ModelConfig parse_args(const ArgParser &arg_parser) {
+ModelConfig ParseArgs(const ArgParser &arg_parser) {
   vocab_output = arg_parser.getopt("-save-vocab");
   vocab_source = arg_parser.getopt("-read-vocab");
   output_file = arg_parser.getopt("-output");
@@ -124,12 +124,12 @@ ModelConfig parse_args(const ArgParser &arg_parser) {
 
 int main(int argc, const char **argv) {
   if (argc == 1) {
-    print_usage();
+    PrintUsage();
     return 0;
   }
-  ArgParser arg_parser = get_parser();
+  ArgParser arg_parser = GetParser();
   arg_parser.parse_arg(argc, argv);
-  ModelConfig conf = parse_args(arg_parser);
+  ModelConfig conf = ParseArgs(arg_parser);
 
   Vocab vocab;
 
@@ -152,11 +152,11 @@ int main(int argc, const char **argv) {
   }
 
   VocabWord *words;
-  build_binary_tree(vocab, &words);
+  BuildBinaryTree(vocab, &words);
 
   llf *model;
-  train_model(vocab, conf, words, model);
-  predict_model(model, conf.sample_rate, conf.layer_size, vocab, words,
+  TrainModel(vocab, conf, words, model);
+  PredictModel(model, conf.sample_rate, conf.layer_size, vocab, words,
                 test_file, output_file);
   return 0;
 }

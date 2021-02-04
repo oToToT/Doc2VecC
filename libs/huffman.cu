@@ -11,7 +11,7 @@ using llu = uint64_t;
 
 extern int debug;
 
-void build_binary_tree(const Vocab& vocab, VocabWord** words_ptr) {
+void BuildBinaryTree(const Vocab& vocab, VocabWord** words_ptr) {
   VocabWord*& words = *words_ptr;
   if (debug > 1) {
     std::cout << "Building Huffman Tree." << std::endl;
