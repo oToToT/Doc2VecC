@@ -1,8 +1,9 @@
 ---
-  Checks:          'clang-analyzer-*,
-                    bugprone-*,
-                    modernize-*,
-                    -modernize-use-trailing-return-type,
-                    google-*,
-                    readability-*,
-                    portability-*'
+Checks:          'clang-analyzer-*,
+                bugprone-*,
+                modernize-*,
+                -modernize-use-trailing-return-type,
+                google-*,
+                readability-*,
+                portability-*'
+ExtraArgs: ['--cuda-gpu-arch=sm_72', '-I/opt/cuda/targets/x86_64-linux/include']
